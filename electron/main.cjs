@@ -103,7 +103,7 @@ function createTray() {
   tray.setContextMenu(Menu.buildFromTemplate([{label:'Melodify öffnen',click:()=>win?.show()},{label:'Beenden',click:()=>{quitting=true;app.quit();}}]));tray.on('double-click',()=>win?.show());
 }
 function createWindow() {
-  win=new BrowserWindow({width:1350,height:850,minWidth:900,minHeight:610,backgroundColor:'#0c0e13',title:'Melodify',show:false,autoHideMenuBar:true,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:false,webSecurity:true}});
+  win=new BrowserWindow({width:1350,height:850,minWidth:900,minHeight:610,backgroundColor:'#0c0e13',title:'Melodify',icon:path.join(__dirname,'../public/melodify-logo.png'),show:false,autoHideMenuBar:true,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:false,webSecurity:true}});
   win.once('ready-to-show',()=>win.show());
   win.on('close',event=>{if(!quitting && state.settings.minimizeToTray && tray){event.preventDefault();win.hide();}});
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
@@ -112,6 +112,7 @@ function createWindow() {
   else win.loadFile(path.join(__dirname,'../dist/index.html'));
 }
 app.whenReady().then(async()=> {
+  if (process.platform==='win32') app.setAppUserModelId('dev.lyvt.melodify');
   await restore(); protocol.handle('melodify-media',mediaHandler);createWindow();createTray();
   ipcMain.handle('state:load',()=>state);
   ipcMain.handle('state:save',async(_event,patch)=>{

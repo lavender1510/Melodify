@@ -2,7 +2,7 @@
 
 **A refined, local-first music player for Windows.** Inspired by the clarity of Samsung Music, designed for the desktop.
 
-## Included in the 0.1.0 preview
+## Included in the 0.1.1 preview
 
 - Local library scanning for MP3, FLAC, WAV, OGG, Opus, AAC, and M4A (playback depends on Chromium's installed codecs).
 - Embedded album art and folder covers, local metadata, artists, albums, folder view, searching, sorting, and favorites.
@@ -35,7 +35,7 @@ To package `.exe` NSIS and portable builds **on Windows**:
 npm run dist:win
 ```
 
-Every push to `main` builds Windows packages via GitHub Actions and publishes a **v0.1.0 prerelease** when the workflow succeeds.
+Every push to `main` builds Windows packages via GitHub Actions and publishes a **v0.1.1 prerelease** when the workflow succeeds.
 
 ## Known preview limitations
 
