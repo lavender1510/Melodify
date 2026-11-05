@@ -1,0 +1,67 @@
+{
+  "name": "melodify",
+  "version": "0.1.0",
+  "description": "A polished, local-first music player for Windows",
+  "author": "lavender1510",
+  "license": "MIT",
+  "private": true,
+  "main": "electron/main.cjs",
+  "repository": "https://github.com/lavender1510/Melodify",
+  "scripts": {
+    "dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env MELODIFY_DEV_URL=http://127.0.0.1:5173 electron .\"",
+    "build": "tsc --noEmit && vite build",
+    "dist:win": "npm run build && electron-builder --win nsis portable --x64",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "music-metadata": "^11.10.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.4.1",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "^45.2.3",
+    "electron-builder": "^26.0.12",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.0",
+    "vitest": "^3.0.0",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "dev.lyvt.melodify",
+    "productName": "Melodify",
+    "asar": true,
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "public/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "artifactName": "Melodify-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "portable": {
+      "artifactName": "Melodify-${version}-portable.${ext}"
+    }
+  }
+}
