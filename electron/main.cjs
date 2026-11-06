@@ -69,7 +69,7 @@ async function scan() {
   } catch(err) { notifyProgress({stage:'error',message:err.message}); return {error:err.message,tracks:state.tracks}; }
   finally {scanning=false;}
 }
-function mediaHandler(request) {
+async function mediaHandler(request) {
   try {
     const u=new URL(request.url); const id=decodeURIComponent(u.pathname.slice(1));
     if (!/^[a-f0-9]{24}$/.test(id)) return new Response('Not found',{status:404});
@@ -90,7 +90,7 @@ async function serveFile(file,request) {
     const stat=await fsp.stat(file); const size=stat.size; const range=request.headers.get('range');
     let start=0,end=size-1,status=200;
     if (range) { const m=/^bytes=(\d*)-(\d*)$/.exec(range); if(!m) return new Response(null,{status:416,headers:{'Content-Range':`bytes */${size}`}}); if(m[1]) start=Number(m[1]); if(m[2]) end=Number(m[2]); if(!m[1] && m[2]) {start=Math.max(0,size-Number(m[2]));end=size-1;} if(start>=size || end<start) return new Response(null,{status:416,headers:{'Content-Range':`bytes */${size}`}});end=Math.min(size-1,end);status=206; }
-    const headers={ 'Content-Type': MIME[path.extname(file).toLowerCase()]||'application/octet-stream', 'Accept-Ranges':'bytes','Content-Length':String(Math.max(0,end-start+1)) };
+    const headers={ 'Content-Type': MIME[path.extname(file).toLowerCase()]||'application/octet-stream', 'Accept-Ranges':'bytes','Content-Length':String(Math.max(0,end-start+1)), 'Access-Control-Allow-Origin':'*', 'Cross-Origin-Resource-Policy':'cross-origin' };
     if (status===206) headers['Content-Range']=`bytes ${start}-${end}/${size}`;
     return new Response(request.method==='HEAD'?null:Readable.toWeb(fs.createReadStream(file,{start,end})),{status,headers});
   } catch {return new Response('File unavailable',{status:404});}

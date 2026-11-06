@@ -2,7 +2,7 @@
 
 **A refined, local-first music player for Windows.** Inspired by the clarity of Samsung Music, designed for the desktop.
 
-## Included in the 0.1.1 preview
+## Included in the 0.1.0 preview
 
 - Local library scanning for MP3, FLAC, WAV, OGG, Opus, AAC, and M4A (playback depends on Chromium's installed codecs).
 - Embedded album art and folder covers, local metadata, artists, albums, folder view, searching, sorting, and favorites.
@@ -35,7 +35,7 @@ To package `.exe` NSIS and portable builds **on Windows**:
 npm run dist:win
 ```
 
-Every push to `main` builds Windows packages via GitHub Actions and publishes a **v0.1.1 prerelease** when the workflow succeeds.
+Every push to `main` builds Windows packages via GitHub Actions and publishes a **v0.1.0 prerelease** when the workflow succeeds.
 
 ## Known preview limitations
 
@@ -59,3 +59,14 @@ Renderer runs without Node integration and with context isolation. Electron main
 ## License
 
 MIT
+
+
+## Änderungen für v0.1.2 (lokaler Update-Entwurf)
+
+- Audio: `crossOrigin=anonymous` vor dem Laden gesetzt, CORS-/CORP-Header am geschützten Media-Protokoll ergänzt; detailliertere Wiedergabefehler.
+- Ausgabe: Wechsel am `AudioContext` statt nur am HTML-Audioelement; Rückmeldung bei nicht unterstützten Geräten.
+- Playlists: Eingabedialog statt `window.prompt` (Electron unterstützt diese Funktion nicht zuverlässig).
+- Visualisierung: Balken, Wellenform, Bass-Kreis, bei Pause kein Animationsloop.
+- Branding: bereitgestelltes Melodify-Logo in Sidebar, Splash, Tray, EXE-Icon.
+
+**Teststatus:** Quellcodeänderungen und Node-Syntaxprüfung durchgeführt. Ein Windows-End-to-End-Test und ein vollständiger TypeScript-/Electron-Build stehen noch aus; daher noch kein veröffentlichter Release.
