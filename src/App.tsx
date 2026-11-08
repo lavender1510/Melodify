@@ -100,7 +100,7 @@ export default function App(){
   if (loading) return;
   // Splash remains visible while the library initializes; animate the exit
   // only when the main UI is ready, rather than fading out on a fixed clock.
-  const timer=window.setTimeout(()=>setSplash(false),900);
+  const timer=window.setTimeout(()=>setSplash(false),1200);
   return()=>window.clearTimeout(timer);
  },[loading]);
  useEffect(()=>{audio.current.crossOrigin='anonymous';audio.current.preload='auto';},[]);
@@ -275,7 +275,7 @@ export default function App(){
  const dragFrom=useRef<number|null>(null);
  const [repeatIcon,setRepeatIcon]=useState(false);useEffect(()=>setRepeatIcon(repeat==='one'),[repeat]);
  return <div className={'app '+(isLight(theme)?'light':'')} style={style}>
-  {splash&&<div className="melodify-splash" role="status" aria-label="Melodify wird gestartet"><img src={new URL("./melodify-logo.png", document.baseURI).href} alt="Melodify"/><span>MELODIFY</span></div>}
+  {splash&&<div className={"melodify-splash "+(!loading?"is-ready":"")} role="status" aria-label="Melodify wird gestartet"><img src={new URL("./melodify-logo.png", document.baseURI).href} alt="Melodify"/><span>MELODIFY</span></div>}
   {playlistDialog&&<div className="modal-overlay" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setPlaylistDialog(false)}}><form className="playlist-dialog" onSubmit={e=>{e.preventDefault();confirmPlaylist()}}><img src={new URL("./melodify-logo.png", document.baseURI).href} alt=""/><h2>Neue Playlist</h2><p>Gib deiner Sammlung einen Namen.</p><input autoFocus maxLength={100} value={playlistName} onChange={e=>setPlaylistName(e.target.value)} placeholder="z. B. Late Night Drives" aria-label="Playlistname"/><div className="dialog-actions"><button type="button" className="secondary-button" onClick={()=>setPlaylistDialog(false)}>Abbrechen</button><button className="primary-button" type="submit" disabled={!playlistName.trim()}>Erstellen</button></div></form></div>}
   <div className="background-wallpaper"/><div className="app-shell">
   <aside className="sidebar"><button className="brand" onClick={()=>selectPage('home')}><div className="brand-mark"><img src={new URL("./melodify-logo.png", document.baseURI).href} alt="Melodify"/></div><span>melodify<span className="brand-dot">.</span></span></button>
