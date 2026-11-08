@@ -251,6 +251,12 @@ export default function App(){
  const settingsTabs=[{name:'Audio',icon:<SlidersHorizontal size={18}/>},{name:'Darstellung',icon:<Disc3 size={18}/>},{name:'Wiedergabe',icon:<Headphones size={18}/>}];
  const [settingsTab,setSettingsTab]=useState('Audio');
  const [themeFamily,setThemeFamily]=useState('melodify');
+ useEffect(()=>{
+  const selected=spicetifyThemes.find(t=>t.id===state.themeId);
+  if(selected)setThemeFamily(selected.description.replace('Spicetify · ',''));
+  else if(state.customThemes.some(t=>t.id===state.themeId))setThemeFamily('custom');
+  else setThemeFamily('melodify');
+ },[state.themeId,state.customThemes]);
  const visibleThemes=themeFamily==='melodify'?themes:themeFamily==='custom'?state.customThemes:spicetifyThemes.filter(t=>t.description==='Spicetify · '+themeFamily);
  const selectPage=(p:Page)=>{setPage(p);setSearch('');setFilterFav(false);setActionTrack(null);if(p==='albums')setSelectedAlbum(null);if(p==='artists')setSelectedArtist(null);if(p==='playlists')setSelectedPlaylist(null);if(p==='folders')setSelectedFolder(null);};
  const songRow=(track:Track,index:number)=><div key={track.id} className={'song-row '+(track.id===activeId?'is-current':'')} onDoubleClick={()=>playList(visibleTracks,track.id)}>
