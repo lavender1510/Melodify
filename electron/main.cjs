@@ -1,14 +1,13 @@
-const { app, BrowserWindow, ipcMain, dialog, nativeImage, Tray, Menu, protocol, net } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, nativeImage, Tray, Menu, protocol } = require('electron');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
 const crypto = require('node:crypto');
-const { pathToFileURL } = require('node:url');
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'melodify-media', privileges: { secure: true, standard: true, stream: true, supportFetchAPI: true, corsEnabled: true } }]);
 const AUDIO_EXT = new Set(['.mp3', '.flac', '.wav', '.ogg', '.oga', '.m4a', '.aac', '.opus']);
-const MIME = {'.mp3':'audio/mpeg','.flac':'audio/flac','.wav':'audio/wav','.ogg':'audio/ogg','.oga':'audio/ogg','.m4a':'audio/mp4','.aac':'audio/aac','.opus':'audio/ogg','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp'};
+const {serveFile} = require('./media-server.cjs');
 const defaults = () => ({ folders: [], tracks: [], playlists: [], favorites: [], favoritePlaylists: [], customThemes: [], themeId: 'nocturne', settings: { volume: .75, balance: 0, equalizer: [0,0,0,0,0,0,0,0,0,0], eqPreset:'flat', normalize: false, gain: 0, visualization:true, minimizeToTray:false, outputDevice:'default' } });
 let state, win, tray, quitting = false, scanning = false;
 const mediaFiles = new Map();
@@ -104,46 +103,6 @@ async function mediaHandler(request) {
   return new Response('Not found', { status: 404 });
 }
 
-async function serveFile(file, request) {
-  try {
-    await fsp.access(file, fs.constants.R_OK);
-    const extension = path.extname(file).toLowerCase();
-    const headers = new Headers(request.headers);
-    headers.delete('host');
-    headers.delete('origin');
-
-    // Delegate file delivery to Chromium's native file loader. This preserves
-    // Range requests used by HTMLAudioElement and avoids a hand-built stream
-    // Response that Chromium may reject as an unsupported media source.
-    const response = await net.fetch(pathToFileURL(file).toString(), {
-      method: request.method === 'HEAD' ? 'HEAD' : 'GET',
-      headers
-    });
-
-    const responseHeaders = new Headers(response.headers);
-    responseHeaders.set('Content-Type', MIME[extension] || responseHeaders.get('content-type') || 'application/octet-stream');
-    responseHeaders.set('Access-Control-Allow-Origin', '*');
-    responseHeaders.set('Access-Control-Allow-Methods', 'GET,HEAD,OPTIONS');
-    responseHeaders.set('Access-Control-Allow-Headers', 'Range,Content-Type');
-    responseHeaders.set('Access-Control-Expose-Headers', 'Accept-Ranges,Content-Length,Content-Range,Content-Type');
-    responseHeaders.set('Cache-Control', 'no-store');
-
-    return new Response(request.method === 'HEAD' ? null : response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: responseHeaders
-    });
-  } catch (error) {
-    console.error('[Melodify] unable to serve media file:', file, error);
-    return new Response('File unavailable', {
-      status: 404,
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Access-Control-Allow-Origin': '*'
-      }
-    });
-  }
-}
 
 function createTray() {
   const iconPath=path.join(app.getAppPath(),'public','melodify-logo.png');
@@ -153,7 +112,7 @@ function createTray() {
   tray.setContextMenu(Menu.buildFromTemplate([{label:'Melodify öffnen',click:()=>win?.show()},{label:'Beenden',click:()=>{quitting=true;app.quit();}}]));tray.on('double-click',()=>win?.show());
 }
 function createWindow() {
-  win=new BrowserWindow({width:1350,height:850,minWidth:900,minHeight:610,backgroundColor:'#0c0e13',title:'Melodify',icon:fs.existsSync(path.join(app.getAppPath(),'public','melodify-logo.png')) ? path.join(app.getAppPath(),'public','melodify-logo.png') : undefined,show:false,autoHideMenuBar:true,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:false,webSecurity:true}});
+  win=new BrowserWindow({width:1350,height:850,minWidth:900,minHeight:610,backgroundColor:'#0c0e13',title:'Melodify',icon:fs.existsSync(path.join(app.getAppPath(),'build','icon.ico')) ? path.join(app.getAppPath(),'build','icon.ico') : (fs.existsSync(path.join(app.getAppPath(),'public','melodify-logo.png')) ? path.join(app.getAppPath(),'public','melodify-logo.png') : undefined),show:false,autoHideMenuBar:true,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:false,webSecurity:true}});
   win.once('ready-to-show',()=>win.show());
   win.on('close',event=>{if(!quitting && state.settings.minimizeToTray && tray){event.preventDefault();win.hide();}});
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
@@ -164,6 +123,24 @@ function createWindow() {
 app.whenReady().then(async()=> {
   if (process.platform==='win32') app.setAppUserModelId('dev.lyvt.melodify');
   await restore(); protocol.handle('melodify-media',mediaHandler);createWindow();createTray();
+  ipcMain.handle('media:diagnose', async (_event, id) => {
+    if (typeof id !== 'string' || !/^[a-f0-9]{24}$/.test(id)) return {ok:false,reason:'Ungültige Titel-ID.'};
+    const file = mediaFiles.get(id);
+    if (!file) return {ok:false,reason:'Titel ist nicht in der Medienbibliothek registriert. Bitte Bibliothek neu scannen.'};
+    try {
+      const stat = await fsp.stat(file);
+      await fsp.access(file, fs.constants.R_OK);
+      if (!stat.isFile() || !stat.size) return {ok:false,reason:'Die Musikdatei ist leer oder keine reguläre Datei.'};
+      return {ok:true,format:path.extname(file).slice(1).toUpperCase(),size:stat.size};
+    } catch (error) {
+      const code = error && error.code;
+      return {ok:false,reason:code === 'ENOENT'
+        ? 'Die Musikdatei wurde verschoben oder gelöscht. Bitte Bibliothek neu scannen.'
+        : code === 'EACCES' || code === 'EPERM'
+          ? 'Kein Lesezugriff auf die Musikdatei. Prüfe die Windows-Dateiberechtigungen.'
+          : 'Die Musikdatei ist nicht lesbar. Prüfe den Datenträger und scanne erneut.'};
+    }
+  });
   ipcMain.handle('state:load',()=>state);
   ipcMain.handle('state:save',async(_event,patch)=>{
     // Nur zugelassene Präferenzen und benutzerdefinierte Sammlungen übernehmen.

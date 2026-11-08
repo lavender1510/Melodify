@@ -1,6 +1,6 @@
 {
   "name": "melodify",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "A polished, local-first music player for Windows",
   "author": "lavender1510",
   "license": "MIT",
@@ -8,10 +8,10 @@
   "main": "electron/main.cjs",
   "repository": "https://github.com/lavender1510/Melodify",
   "scripts": {
-    "dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env MELODIFY_DEV_URL=http://127.0.0.1:5173 electron .\"",
-    "build": "tsc --noEmit && vite build",
+    "dev": "node scripts/prepare-brand.cjs && concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env MELODIFY_DEV_URL=http://127.0.0.1:5173 electron .\"",
+    "build": "node scripts/prepare-brand.cjs && tsc --noEmit && vite build",
     "dist:win": "npm run build && electron-builder --win nsis portable --x64",
-    "test": "vitest run",
+    "test": "vitest run && node --test electron/media-server.test.cjs",
     "test:audio": "electron --no-sandbox electron/audio-smoke.cjs"
   },
   "dependencies": {
@@ -42,6 +42,7 @@
       "dist/**/*",
       "electron/**/*",
       "public/**/*",
+      "build/icon.ico",
       "package.json",
       "node_modules/**/*"
     ],
