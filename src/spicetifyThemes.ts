@@ -119,7 +119,7 @@ text|EverforestDarkMedium|2d353b|2d353b|2d353b|d3c6aa|859289|a7c080
 text|EverforestDarkSoft|333c43|333c43|333c43|d3c6aa|859289|a7c080
 text|FlexokiLight|fffcf0|fffcf0|fffcf0|100f0f|6f6e69|24837b
 text|FlexokiDark|100f0f|100f0f|100f0f|cecdc3|878580|3aa99f
-text|BloodMoon|0d0d0f|0d0d0f|f4ecec|b59b9e|ff2244
+text|BloodMoon|0d0d0f|0d0d0f|0d0d0f|f4ecec|b59b9e|ff2244
 `.trim();
 
 export const spicetifyThemes:Theme[] = colors.split('\n').map(line => {
