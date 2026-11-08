@@ -54,30 +54,45 @@ jobs:
             windows-electron-builder-
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+      - name: Prepare Electron runtime
+        shell: pwsh
+        run: |
+          $attempt = 0
+          do {
+            $attempt++
+            npx electron --version
+            if ($LASTEXITCODE -eq 0) { exit 0 }
+            if ($attempt -lt 3) { Start-Sleep -Seconds 10 }
+          } while ($attempt -lt 3)
+          exit $LASTEXITCODE
       - name: Test and build
         run: |
           npm test
           npm run build
+          npm run test:audio
       - name: Build Windows installer and portable app
         shell: pwsh
         run: |
           $attempt = 0
           do {
             $attempt++
-            npx electron-builder --win nsis portable --x64 --publish never
+            npx electron-builder --win dir --x64 --publish never
             if ($LASTEXITCODE -eq 0) { exit 0 }
             if ($attempt -lt 3) { Start-Sleep -Seconds 15 }
           } while ($attempt -lt 3)
           exit $LASTEXITCODE
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      - name: Verify packaged Electron audio pipeline
-        run: npm run test:audio
-      - name: Upload executables
+      - name: Package portable ZIP
+        shell: pwsh
+        run: |
+          if (Test-Path "release\Melodify-0.1.3-portable.zip") { Remove-Item "release\Melodify-0.1.3-portable.zip" -Force }
+          Compress-Archive -Path "release\win-unpacked\*" -DestinationPath "release\Melodify-0.1.3-portable.zip" -CompressionLevel Optimal
+      - name: Upload Windows portable package
         uses: actions/upload-artifact@v4
         with:
           name: Melodify-Windows
-          path: release/*.exe
+          path: release/Melodify-0.1.3-portable.zip
           if-no-files-found: error
       - name: Publish release
         uses: softprops/action-gh-release@v2
@@ -87,4 +102,4 @@ jobs:
           name: Melodify v${{ steps.version.outputs.version }} — Windows Preview
           prerelease: true
           generate_release_notes: true
-          files: release/*.exe
+          files: release/Melodify-0.1.3-portable.zip
