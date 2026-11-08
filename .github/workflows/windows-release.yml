@@ -2,6 +2,8 @@ name: Windows Build & Release
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 concurrency:
   group: melodify-release-${{ github.ref }}
@@ -71,6 +73,7 @@ jobs:
           npm run build
           npm run test:audio
       - name: Build Windows installer and portable app
+        if: github.event_name != 'pull_request'
         shell: pwsh
         run: |
           $attempt = 0
@@ -95,6 +98,7 @@ jobs:
           path: release/Melodify-${{ steps.version.outputs.version }}-portable.zip
           if-no-files-found: error
       - name: Publish release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
