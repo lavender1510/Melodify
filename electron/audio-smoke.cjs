@@ -1,7 +1,7 @@
-const { app, BrowserWindow, net, protocol } = require('electron');
+const { app, BrowserWindow, protocol } = require('electron');
+const {serveFile} = require('./media-server.cjs');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { pathToFileURL } = require('node:url');
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'melodify-test', privileges: { secure: true, standard: true, stream: true, supportFetchAPI: true, corsEnabled: true } }
@@ -21,11 +21,7 @@ function wavPcm16(seconds=0.4, sampleRate=44100){
   await app.whenReady();
   const temp=path.join(app.getPath('temp'),'melodify-audio-smoke.wav');
   await fs.writeFile(temp,wavPcm16());
-  protocol.handle('melodify-test',request=>{
-    const headers=new Headers(request.headers);
-    headers.delete('host');headers.delete('origin');
-    return net.fetch(pathToFileURL(temp).toString(),{method:request.method,headers});
-  });
+  protocol.handle('melodify-test',request=>serveFile(temp,request));
 
   const html=`<!doctype html><html><body><audio id="a" crossorigin="anonymous"></audio><script>
     const a=document.getElementById('a');
