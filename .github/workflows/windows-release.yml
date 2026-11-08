@@ -30,6 +30,12 @@ jobs:
             git push origin HEAD:main
           }
           "commit_sha=$(git rev-parse HEAD)" >> $env:GITHUB_OUTPUT
+      - name: Read package version
+        id: version
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          "version=$version" >> $env:GITHUB_OUTPUT
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -53,9 +59,9 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.1.1
+          tag_name: v${{ steps.version.outputs.version }}
           target_commitish: ${{ steps.source.outputs.commit_sha }}
-          name: Melodify v0.1.1 — Windows Preview
+          name: Melodify v${{ steps.version.outputs.version }} — Windows Preview
           prerelease: true
           generate_release_notes: true
           files: release/*.exe
