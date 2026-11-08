@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 // Explizite, kleine API: kein Node-Zugriff im Renderer.
 contextBridge.exposeInMainWorld('melodify', {
   load: () => ipcRenderer.invoke('state:load'),
+  diagnoseMedia: (id) => ipcRenderer.invoke('media:diagnose', id),
   save: (patch) => ipcRenderer.invoke('state:save', patch),
   addFolders: () => ipcRenderer.invoke('library:add-folder'),
   rescan: () => ipcRenderer.invoke('library:rescan'),
