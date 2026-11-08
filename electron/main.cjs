@@ -1,12 +1,12 @@
-const { app, BrowserWindow, ipcMain, dialog, nativeImage, Tray, Menu, protocol } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, nativeImage, Tray, Menu, protocol, net } = require('electron');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
 const crypto = require('node:crypto');
-const { Readable } = require('node:stream');
+const { pathToFileURL } = require('node:url');
 
-protocol.registerSchemesAsPrivileged([{ scheme: 'melodify-media', privileges: { secure: true, standard: true, stream: true, supportFetchAPI: true } }]);
+protocol.registerSchemesAsPrivileged([{ scheme: 'melodify-media', privileges: { secure: true, standard: true, stream: true, supportFetchAPI: true, corsEnabled: true } }]);
 const AUDIO_EXT = new Set(['.mp3', '.flac', '.wav', '.ogg', '.oga', '.m4a', '.aac', '.opus']);
 const MIME = {'.mp3':'audio/mpeg','.flac':'audio/flac','.wav':'audio/wav','.ogg':'audio/ogg','.oga':'audio/ogg','.m4a':'audio/mp4','.aac':'audio/aac','.opus':'audio/ogg','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp'};
 const defaults = () => ({ folders: [], tracks: [], playlists: [], favorites: [], favoritePlaylists: [], customThemes: [], themeId: 'nocturne', settings: { volume: .75, balance: 0, equalizer: [0,0,0,0,0,0,0,0,0,0], eqPreset:'flat', normalize: false, gain: 0, visualization:true, minimizeToTray:false, outputDevice:'default' } });
@@ -71,39 +71,89 @@ async function scan() {
 }
 async function mediaHandler(request) {
   try {
-    const u=new URL(request.url); const id=decodeURIComponent(u.pathname.slice(1));
-    if (!/^[a-f0-9]{24}$/.test(id)) return new Response('Not found',{status:404});
-    if (u.hostname==='track') {
-      const file=mediaFiles.get(id); if (!file) return new Response('Not found',{status:404});
-      return serveFile(file,request);
+    const u = new URL(request.url);
+    const id = decodeURIComponent(u.pathname.slice(1));
+    if (!/^[a-f0-9]{24}$/.test(id)) return new Response('Not found', { status: 404 });
+
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET,HEAD,OPTIONS',
+          'Access-Control-Allow-Headers': 'Range,Content-Type',
+          'Access-Control-Max-Age': '86400'
+        }
+      });
     }
-    if (u.hostname==='art') {
-      const cover=['.jpg','.png'].map(ext=>path.join(artDir(),id+ext)).find(fs.existsSync);
-      if (!cover) return new Response('Not found',{status:404});
-      return serveFile(cover,request);
+
+    if (u.hostname === 'track') {
+      const file = mediaFiles.get(id);
+      if (!file) return new Response('Not found', { status: 404 });
+      return serveFile(file, request);
     }
-  } catch { /* Ungültige URL */ }
-  return new Response('Not found',{status:404});
+
+    if (u.hostname === 'art') {
+      const cover = ['.jpg', '.png'].map(ext => path.join(artDir(), id + ext)).find(fs.existsSync);
+      if (!cover) return new Response('Not found', { status: 404 });
+      return serveFile(cover, request);
+    }
+  } catch (error) {
+    console.error('[Melodify] media request failed:', error);
+  }
+  return new Response('Not found', { status: 404 });
 }
-async function serveFile(file,request) {
+
+async function serveFile(file, request) {
   try {
-    const stat=await fsp.stat(file); const size=stat.size; const range=request.headers.get('range');
-    let start=0,end=size-1,status=200;
-    if (range) { const m=/^bytes=(\d*)-(\d*)$/.exec(range); if(!m) return new Response(null,{status:416,headers:{'Content-Range':`bytes */${size}`}}); if(m[1]) start=Number(m[1]); if(m[2]) end=Number(m[2]); if(!m[1] && m[2]) {start=Math.max(0,size-Number(m[2]));end=size-1;} if(start>=size || end<start) return new Response(null,{status:416,headers:{'Content-Range':`bytes */${size}`}});end=Math.min(size-1,end);status=206; }
-    const headers={ 'Content-Type': MIME[path.extname(file).toLowerCase()]||'application/octet-stream', 'Accept-Ranges':'bytes','Content-Length':String(Math.max(0,end-start+1)), 'Access-Control-Allow-Origin':'*', 'Cross-Origin-Resource-Policy':'cross-origin' };
-    if (status===206) headers['Content-Range']=`bytes ${start}-${end}/${size}`;
-    return new Response(request.method==='HEAD'?null:Readable.toWeb(fs.createReadStream(file,{start,end})),{status,headers});
-  } catch {return new Response('File unavailable',{status:404});}
+    await fsp.access(file, fs.constants.R_OK);
+    const extension = path.extname(file).toLowerCase();
+    const headers = new Headers(request.headers);
+    headers.delete('host');
+    headers.delete('origin');
+
+    // Delegate file delivery to Chromium's native file loader. This preserves
+    // Range requests used by HTMLAudioElement and avoids a hand-built stream
+    // Response that Chromium may reject as an unsupported media source.
+    const response = await net.fetch(pathToFileURL(file).toString(), {
+      method: request.method === 'HEAD' ? 'HEAD' : 'GET',
+      headers
+    });
+
+    const responseHeaders = new Headers(response.headers);
+    responseHeaders.set('Content-Type', MIME[extension] || responseHeaders.get('content-type') || 'application/octet-stream');
+    responseHeaders.set('Access-Control-Allow-Origin', '*');
+    responseHeaders.set('Access-Control-Allow-Methods', 'GET,HEAD,OPTIONS');
+    responseHeaders.set('Access-Control-Allow-Headers', 'Range,Content-Type');
+    responseHeaders.set('Access-Control-Expose-Headers', 'Accept-Ranges,Content-Length,Content-Range,Content-Type');
+    responseHeaders.set('Cache-Control', 'no-store');
+
+    return new Response(request.method === 'HEAD' ? null : response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: responseHeaders
+    });
+  } catch (error) {
+    console.error('[Melodify] unable to serve media file:', file, error);
+    return new Response('File unavailable', {
+      status: 404,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Access-Control-Allow-Origin': '*'
+      }
+    });
+  }
 }
+
 function createTray() {
-  const iconPath=path.join(__dirname,'../public/melodify-logo.png');
+  const iconPath=path.join(app.getAppPath(),'public','melodify-logo.png');
   if(!fs.existsSync(iconPath)) return;
   let icon=nativeImage.createFromPath(iconPath).resize({width:18,height:18});
   if(icon.isEmpty()) return; tray=new Tray(icon);tray.setToolTip('Melodify');
   tray.setContextMenu(Menu.buildFromTemplate([{label:'Melodify öffnen',click:()=>win?.show()},{label:'Beenden',click:()=>{quitting=true;app.quit();}}]));tray.on('double-click',()=>win?.show());
 }
 function createWindow() {
-  win=new BrowserWindow({width:1350,height:850,minWidth:900,minHeight:610,backgroundColor:'#0c0e13',title:'Melodify',icon:path.join(__dirname,'../public/melodify-logo.png'),show:false,autoHideMenuBar:true,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:false,webSecurity:true}});
+  win=new BrowserWindow({width:1350,height:850,minWidth:900,minHeight:610,backgroundColor:'#0c0e13',title:'Melodify',icon:fs.existsSync(path.join(app.getAppPath(),'public','melodify-logo.png')) ? path.join(app.getAppPath(),'public','melodify-logo.png') : undefined,show:false,autoHideMenuBar:true,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:false,webSecurity:true}});
   win.once('ready-to-show',()=>win.show());
   win.on('close',event=>{if(!quitting && state.settings.minimizeToTray && tray){event.preventDefault();win.hide();}});
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
