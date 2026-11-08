@@ -112,7 +112,7 @@ function createTray() {
   tray.setContextMenu(Menu.buildFromTemplate([{label:'Melodify öffnen',click:()=>win?.show()},{label:'Beenden',click:()=>{quitting=true;app.quit();}}]));tray.on('double-click',()=>win?.show());
 }
 function createWindow() {
-  win=new BrowserWindow({width:1350,height:850,minWidth:900,minHeight:610,backgroundColor:'#0c0e13',title:'Melodify',icon:fs.existsSync(path.join(app.getAppPath(),'public','melodify-logo.png')) ? path.join(app.getAppPath(),'public','melodify-logo.png') : undefined,show:false,autoHideMenuBar:true,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:false,webSecurity:true}});
+  win=new BrowserWindow({width:1350,height:850,minWidth:900,minHeight:610,backgroundColor:'#0c0e13',title:'Melodify',icon:fs.existsSync(path.join(app.getAppPath(),'build','icon.ico')) ? path.join(app.getAppPath(),'build','icon.ico') : (fs.existsSync(path.join(app.getAppPath(),'public','melodify-logo.png')) ? path.join(app.getAppPath(),'public','melodify-logo.png') : undefined),show:false,autoHideMenuBar:true,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:false,webSecurity:true}});
   win.once('ready-to-show',()=>win.show());
   win.on('close',event=>{if(!quitting && state.settings.minimizeToTray && tray){event.preventDefault();win.hide();}});
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
