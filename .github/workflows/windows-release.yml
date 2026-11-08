@@ -74,7 +74,6 @@ jobs:
           npm run build
           npm run test:audio
       - name: Build Windows installer and portable app
-        if: github.event_name != 'pull_request'
         shell: pwsh
         run: |
           $attempt = 0
@@ -88,13 +87,11 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - name: Package portable ZIP
-        if: github.event_name != 'pull_request'
         shell: pwsh
         run: |
           if (Test-Path "release\Melodify-${{ steps.version.outputs.version }}-portable.zip") { Remove-Item "release\Melodify-${{ steps.version.outputs.version }}-portable.zip" -Force }
           Compress-Archive -Path "release\win-unpacked\*" -DestinationPath "release\Melodify-${{ steps.version.outputs.version }}-portable.zip" -CompressionLevel Optimal
       - name: Upload Windows portable package
-        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: Melodify-Windows
