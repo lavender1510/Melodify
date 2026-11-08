@@ -38,6 +38,16 @@ function Visualizer({analyser,active,className='',styleType='bars'}:{analyser:An
 }
 const IconButton=({children,onClick,title,active=false,disabled=false}:{children:React.ReactNode;onClick?:()=>void;title:string;active?:boolean;disabled?:boolean})=><button className={'icon-button '+(active?'active':'')} onClick={onClick} disabled={disabled} aria-label={title} title={title}>{children}</button>;
 
+function trackFormatLabel(src:string){
+  try{
+    const ext=new URL(src).pathname.split('.').pop()?.toUpperCase();
+    return ext?`Format: ${ext}`:'Audioquelle unbekannt';
+  }catch{return 'Audioquelle unbekannt';}
+}
+function audiomediaSink(element:HTMLAudioElement){
+  const candidate=element as HTMLAudioElement & {setSinkId?:(sinkId:string)=>Promise<void>};
+  return typeof candidate.setSinkId==='function'?candidate:null;
+}
 export default function App(){
  const [state,setState]=useState<AppState>(DEFAULT);
  const [loading,setLoading]=useState(true);
@@ -86,7 +96,17 @@ export default function App(){
  const currentIndex=queue.indexOf(activeId||'');
  const notify=(message:string)=>{setToast(message);};
  useEffect(()=>{if(!toast)return;const timer=setTimeout(()=>setToast(''),3400);return()=>clearTimeout(timer);},[toast]);
- useEffect(()=>{const timer=setTimeout(()=>setSplash(false),1100);return()=>clearTimeout(timer);},[]);
+ useEffect(()=>{
+  const started=performance.now();
+  let cancelled=false;
+  const hide=()=>{const remaining=Math.max(0,750-(performance.now()-started));window.setTimeout(()=>{if(!cancelled)setSplash(false);},remaining);};
+  if(!loading)hide();
+  else{
+    const fallback=window.setTimeout(()=>{if(!cancelled)setSplash(false);},2200);
+    return()=>{cancelled=true;window.clearTimeout(fallback);};
+  }
+  return()=>{cancelled=true};
+},[loading]);
  useEffect(()=>{audio.current.crossOrigin='anonymous';audio.current.preload='auto';},[]);
  useEffect(()=>{window.melodify?.load().then(s=>setState(s)).catch(()=>notify('Bibliothek konnte nicht geladen werden.')).finally(()=>setLoading(false));const unsub=window.melodify?.onScanProgress(p=>setScanProgress(p));return()=>unsub?.();},[]);
  const persist=(patch:Partial<AppState>)=>{setState(prev=>({...prev,...patch,settings:patch.settings||prev.settings}));window.melodify?.save(patch).catch(()=>notify('Speichern fehlgeschlagen.'));};
@@ -94,7 +114,10 @@ export default function App(){
  useEffect(()=>{queueRef.current=queue;},[queue]);useEffect(()=>{activeRef.current=activeId;},[activeId]);useEffect(()=>{repeatRef.current=repeat;},[repeat]);useEffect(()=>{shuffleRef.current=shuffle;},[shuffle]);useEffect(()=>{playingRef.current=playing;},[playing]);
  const prepareAudio=useCallback(async()=>{
   if(nodes.current) {if(nodes.current.ctx.state==='suspended')await nodes.current.ctx.resume();return;}
-  const ctx=new AudioContext();const source=ctx.createMediaElementSource(audio.current);
+  const AudioContextCtor=window.AudioContext;
+  const sinkId=settings.outputDevice&&settings.outputDevice!=='default'?settings.outputDevice:'';
+  const ctx=new AudioContextCtor(sinkId?({sinkId} as AudioContextOptions & {sinkId:string}):undefined);
+  const source=ctx.createMediaElementSource(audio.current);
   const bands=EQ_BANDS.map((freq,i)=>{const b=ctx.createBiquadFilter();b.type=i===0?'lowshelf':i===EQ_BANDS.length-1?'highshelf':'peaking';b.frequency.value=freq;b.Q.value=1;b.gain.value=settings.equalizer[i]||0;return b;});
   const pan=ctx.createStereoPanner(),gain=ctx.createGain(),compressor=ctx.createDynamicsCompressor(),analyserNode=ctx.createAnalyser();analyserNode.fftSize=256;analyserNode.smoothingTimeConstant=.82;
   let last:AudioNode=source;for(const band of bands){last.connect(band);last=band;}
@@ -102,30 +125,81 @@ export default function App(){
   nodes.current={ctx,bands,pan,gain,compressor,analyser:analyserNode};setAnalyser(analyserNode);await ctx.resume();
  },[settings.equalizer]);
  useEffect(()=>{
-  const a=audio.current;const onTime=()=>setPosition(a.currentTime||0),onLoaded=()=>setDuration(a.duration||0),onPlay=()=>setPlaying(true),onPause=()=>setPlaying(false),onError=()=>{setAudioError('Datei konnte nicht wiedergegeben werden. Format oder Pfad prüfen.');setPlaying(false);};
+  const a=audio.current;
+  const onTime=()=>setPosition(a.currentTime||0);
+  const onLoaded=()=>setDuration(Number.isFinite(a.duration)?a.duration:0);
+  const onPlay=()=>{setPlaying(true);setAudioError('');};
+  const onPause=()=>setPlaying(false);
+  const onError=()=>{
+    const error=a.error;
+    const reason=error?.code===MediaError.MEDIA_ERR_ABORTED?'Wiedergabe wurde abgebrochen.':
+      error?.code===MediaError.MEDIA_ERR_NETWORK?'Die Audiodatei konnte nicht gelesen werden. Prüfe den Dateipfad oder den Datenträger.':
+      error?.code===MediaError.MEDIA_ERR_DECODE?'Der Decoder konnte dieses Audioformat oder den Stream nicht dekodieren.':
+      error?.code===MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED?'Das Audioformat wird von der eingebauten Wiedergabe nicht unterstützt.':
+      'Unbekannter Audiofehler.';
+    setAudioError(`${reason} (${trackFormatLabel(a.src)})`);
+    setPlaying(false);
+  };
   a.addEventListener('timeupdate',onTime);a.addEventListener('loadedmetadata',onLoaded);a.addEventListener('durationchange',onLoaded);a.addEventListener('play',onPlay);a.addEventListener('pause',onPause);a.addEventListener('error',onError);
   return()=>{a.removeEventListener('timeupdate',onTime);a.removeEventListener('loadedmetadata',onLoaded);a.removeEventListener('durationchange',onLoaded);a.removeEventListener('play',onPlay);a.removeEventListener('pause',onPause);a.removeEventListener('error',onError);a.pause();};
  },[]);
  useEffect(()=>{const n=nodes.current;if(!n)return;n.bands.forEach((b,i)=>b.gain.setTargetAtTime(settings.equalizer[i]||0,n.ctx.currentTime,.02));n.pan.pan.setTargetAtTime(settings.balance,n.ctx.currentTime,.02);n.gain.gain.setTargetAtTime(Math.pow(10,settings.gain/20),n.ctx.currentTime,.02);n.compressor.threshold.value=settings.normalize?-19:0;n.compressor.ratio.value=settings.normalize?3:1;audio.current.volume=settings.volume;},[settings]);
  useEffect(()=>{audio.current.volume=settings.volume;},[settings.volume]);
- useEffect(()=>{let cancelled=false;const select=async()=>{
-  const id=settings.outputDevice||'default';
-  try{
-   // AudioContext bestimmt das Ausgabegerät, sobald die WebAudio-Effektkette aktiv ist.
-   const context=nodes.current?.ctx as (AudioContext & {setSinkId?:(sinkId:string)=>Promise<void>})|undefined;
-   if(context?.setSinkId){await context.setSinkId(id);}
-   else if(id!=='default')throw new Error('Dieser Electron-Build unterstützt AudioContext.setSinkId nicht.');
-   if(!cancelled){setActiveOutput(id);setAudioError('');}
-  }catch(err){if(!cancelled){setAudioError('Ausgabegerät nicht verfügbar: '+String(err instanceof Error?err.message:err));updateSettings({outputDevice:activeOutput});}}
- };void select();return()=>{cancelled=true};},[settings.outputDevice,analyser]);
+ useEffect(()=>{
+  let cancelled=false;
+  const select=async()=>{
+    const id=settings.outputDevice||'default';
+    try{
+      const context=nodes.current?.ctx as (AudioContext & {setSinkId?:(sinkId:string)=>Promise<void>})|undefined;
+      if(context?.setSinkId){
+        await context.setSinkId(id==='default'?'':id);
+      }else if(id!=='default'){
+        const media=audiomediaSink(audio.current);
+        if(media) await media.setSinkId(id);
+        else throw new Error('Dieser Electron-Build unterstützt keine direkte Auswahl des Audioausgabegeräts.');
+      }
+      if(!cancelled){setActiveOutput(id);setAudioError('');}
+    }catch(err){
+      if(!cancelled){
+        const message=err instanceof DOMException?`${err.name}: ${err.message}`:String(err instanceof Error?err.message:err);
+        setAudioError(`Ausgabegerät konnte nicht gewechselt werden: ${message}`);
+        setActiveOutput('default');
+        setState(prev=>({...prev,settings:{...prev.settings,outputDevice:'default'}}));
+        window.melodify?.save({settings:{...settings,outputDevice:'default'}}).catch(()=>{});
+      }
+    }
+  };
+  void select();
+  return()=>{cancelled=true};
+},[settings.outputDevice]);
  const refreshOutputs=()=>{navigator.mediaDevices?.enumerateDevices().then(ds=>setOutputDevices(ds.filter(d=>d.kind==='audiooutput'))).catch(()=>{});};
  useEffect(()=>{refreshOutputs();navigator.mediaDevices?.addEventListener('devicechange',refreshOutputs);return()=>navigator.mediaDevices?.removeEventListener('devicechange',refreshOutputs);},[]);
  const startTrack=useCallback(async(id:string,order?:string[])=>{
   const track=tracksRef.current.get(id);if(!track)return;
   if(order && order.length){queueRef.current=order;setQueue(order);}else if(queueRef.current.length===0){queueRef.current=[id];setQueue([id]);}
   activeRef.current=id;setActiveId(id);setPosition(0);setAudioError('');
-  const a=audio.current;a.pause();a.src=songUrl(id);a.load();
-  try{await prepareAudio();await a.play();}catch(err){setPlaying(false);setAudioError('Wiedergabe fehlgeschlagen ('+track.format+'): '+String(err instanceof Error?err.message:err));console.error(err);}
+  const a=audio.current;
+  a.pause();
+  a.currentTime=0;
+  a.src=songUrl(id);
+  a.load();
+  try{
+    await prepareAudio();
+    await new Promise<void>((resolve,reject)=>{
+      if(a.readyState>=HTMLMediaElement.HAVE_METADATA){resolve();return;}
+      const onReady=()=>{cleanup();resolve();};
+      const onError=()=>{cleanup();reject(a.error||new Error('Audioquelle konnte nicht geladen werden.'));};
+      const cleanup=()=>{a.removeEventListener('loadedmetadata',onReady);a.removeEventListener('error',onError);};
+      a.addEventListener('loadedmetadata',onReady,{once:true});
+      a.addEventListener('error',onError,{once:true});
+    });
+    await a.play();
+  }catch(err){
+    setPlaying(false);
+    const detail=err instanceof Error?err.message:String(err);
+    setAudioError(`Wiedergabe fehlgeschlagen (${track.format}): ${detail}`);
+    console.error('[Melodify] playback failed',err);
+  }
  },[prepareAudio]);
  const nextTrack=useCallback((direction:1|-1=1,ended=false)=>{
   const list=queueRef.current;if(!list.length)return;
@@ -196,10 +270,10 @@ export default function App(){
  const dragFrom=useRef<number|null>(null);
  const [repeatIcon,setRepeatIcon]=useState(false);useEffect(()=>setRepeatIcon(repeat==='one'),[repeat]);
  return <div className={'app '+(isLight(theme)?'light':'')} style={style}>
-  {splash&&<div className="melodify-splash" role="status" aria-label="Melodify wird gestartet"><img src="/melodify-logo.png" alt="Melodify"/><span>MELODIFY</span></div>}
-  {playlistDialog&&<div className="modal-overlay" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setPlaylistDialog(false)}}><form className="playlist-dialog" onSubmit={e=>{e.preventDefault();confirmPlaylist()}}><img src="/melodify-logo.png" alt=""/><h2>Neue Playlist</h2><p>Gib deiner Sammlung einen Namen.</p><input autoFocus maxLength={100} value={playlistName} onChange={e=>setPlaylistName(e.target.value)} placeholder="z. B. Late Night Drives" aria-label="Playlistname"/><div className="dialog-actions"><button type="button" className="secondary-button" onClick={()=>setPlaylistDialog(false)}>Abbrechen</button><button className="primary-button" type="submit" disabled={!playlistName.trim()}>Erstellen</button></div></form></div>}
+  {splash&&<div className="melodify-splash" role="status" aria-label="Melodify wird gestartet"><img src="./melodify-logo.png" alt="Melodify"/><span>MELODIFY</span></div>}
+  {playlistDialog&&<div className="modal-overlay" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setPlaylistDialog(false)}}><form className="playlist-dialog" onSubmit={e=>{e.preventDefault();confirmPlaylist()}}><img src="./melodify-logo.png" alt=""/><h2>Neue Playlist</h2><p>Gib deiner Sammlung einen Namen.</p><input autoFocus maxLength={100} value={playlistName} onChange={e=>setPlaylistName(e.target.value)} placeholder="z. B. Late Night Drives" aria-label="Playlistname"/><div className="dialog-actions"><button type="button" className="secondary-button" onClick={()=>setPlaylistDialog(false)}>Abbrechen</button><button className="primary-button" type="submit" disabled={!playlistName.trim()}>Erstellen</button></div></form></div>}
   <div className="background-wallpaper"/><div className="app-shell">
-  <aside className="sidebar"><button className="brand" onClick={()=>selectPage('home')}><div className="brand-mark"><img src="/melodify-logo.png" alt="Melodify"/></div><span>melodify<span className="brand-dot">.</span></span></button>
+  <aside className="sidebar"><button className="brand" onClick={()=>selectPage('home')}><div className="brand-mark"><img src="./melodify-logo.png" alt="Melodify"/></div><span>melodify<span className="brand-dot">.</span></span></button>
    <div className="sidebar-group"><div className="sidebar-label">ENTDECKEN</div>
     {([[Home,'Startseite','home'],[Library,'Alle Songs','songs'],[Album,'Alben','albums'],[Headphones,'Künstler','artists'],[Folder,'Ordner','folders']] as const).map(([Icon,label,p])=><button key={p} className={'sidebar-link '+(page===p?'selected':'')} onClick={()=>selectPage(p)}><Icon size={19} strokeWidth={1.8}/><span>{label}</span>{p==='songs'&&<span className="nav-count">{tracks.length}</span>}</button>)}
    </div><div className="sidebar-group"><div className="sidebar-label">DEINE SAMMLUNG</div>
