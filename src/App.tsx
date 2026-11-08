@@ -38,12 +38,6 @@ function Visualizer({analyser,active,className='',styleType='bars'}:{analyser:An
 }
 const IconButton=({children,onClick,title,active=false,disabled=false}:{children:React.ReactNode;onClick?:()=>void;title:string;active?:boolean;disabled?:boolean})=><button className={'icon-button '+(active?'active':'')} onClick={onClick} disabled={disabled} aria-label={title} title={title}>{children}</button>;
 
-function trackFormatLabel(src:string){
-  try{
-    const ext=new URL(src).pathname.split('.').pop()?.toUpperCase();
-    return ext?`Format: ${ext}`:'Audioquelle unbekannt';
-  }catch{return 'Audioquelle unbekannt';}
-}
 function audiomediaSink(element:HTMLAudioElement){
   const candidate=element as HTMLAudioElement & {setSinkId?:(sinkId:string)=>Promise<void>};
   return typeof candidate.setSinkId==='function'?candidate:null;
@@ -133,7 +127,8 @@ export default function App(){
       error?.code===MediaError.MEDIA_ERR_DECODE?'Der Decoder konnte dieses Audioformat oder den Stream nicht dekodieren.':
       error?.code===MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED?'Das Audioformat wird von der eingebauten Wiedergabe nicht unterstützt.':
       'Unbekannter Audiofehler.';
-    setAudioError(`${reason} (${trackFormatLabel(a.src)})`);
+    const track=tracksRef.current.get(activeRef.current||'');
+    setAudioError(`${track?`„${track.title}“ (${track.format}): `:''}${reason}`);
     setPlaying(false);
   };
   a.addEventListener('timeupdate',onTime);a.addEventListener('loadedmetadata',onLoaded);a.addEventListener('durationchange',onLoaded);a.addEventListener('play',onPlay);a.addEventListener('pause',onPause);a.addEventListener('error',onError);
@@ -175,6 +170,7 @@ export default function App(){
   if(order && order.length){queueRef.current=order;setQueue(order);}else if(queueRef.current.length===0){queueRef.current=[id];setQueue([id]);}
   activeRef.current=id;setActiveId(id);setPosition(0);setAudioError('');
   const a=audio.current;
+  a.pause();
   const diagnosis=await window.melodify?.diagnoseMedia(id);
   if (diagnosis && !diagnosis.ok) {
     setPlaying(false);
