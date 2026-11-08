@@ -86,11 +86,38 @@ jobs:
           exit $LASTEXITCODE
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Build Windows setup installer (NSIS)
+        shell: pwsh
+        run: |
+          $attempt = 0
+          do {
+            $attempt++
+            npx electron-builder --win nsis --x64 --publish never
+            if ($LASTEXITCODE -eq 0) { exit 0 }
+            if ($attempt -lt 3) { Start-Sleep -Seconds 15 }
+          } while ($attempt -lt 3)
+          exit $LASTEXITCODE
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - name: Package portable ZIP
         shell: pwsh
         run: |
           if (Test-Path "release\Melodify-${{ steps.version.outputs.version }}-portable.zip") { Remove-Item "release\Melodify-${{ steps.version.outputs.version }}-portable.zip" -Force }
           Compress-Archive -Path "release\win-unpacked\*" -DestinationPath "release\Melodify-${{ steps.version.outputs.version }}-portable.zip" -CompressionLevel Optimal
+      - name: Verify setup installer
+        shell: pwsh
+        run: |
+          $file = "release\\Melodify-${{ steps.version.outputs.version }}-x64.exe"
+          if (!(Test-Path $file)) { throw "Windows setup installer not found: $file" }
+          $item = Get-Item $file
+          if ($item.Length -lt 1000000) { throw "Windows setup installer is unexpectedly small" }
+          Write-Host "Verified Windows setup installer: $file ($($item.Length) bytes)"
+      - name: Upload Windows setup installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Melodify-Windows-Setup
+          path: release/Melodify-${{ steps.version.outputs.version }}-x64.exe
+          if-no-files-found: error
       - name: Upload Windows portable package
         uses: actions/upload-artifact@v4
         with:
@@ -106,4 +133,6 @@ jobs:
           name: Melodify v${{ steps.version.outputs.version }} — Windows Preview
           prerelease: true
           generate_release_notes: true
-          files: release/Melodify-${{ steps.version.outputs.version }}-portable.zip
+          files: |
+            release/Melodify-${{ steps.version.outputs.version }}-x64.exe
+            release/Melodify-${{ steps.version.outputs.version }}-portable.zip
