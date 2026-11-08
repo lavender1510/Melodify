@@ -259,6 +259,20 @@ export default function App(){
  },[state.themeId,state.customThemes]);
  const visibleThemes=themeFamily==='melodify'?themes:themeFamily==='custom'?state.customThemes:spicetifyThemes.filter(t=>t.description==='Spicetify · '+themeFamily);
  const selectPage=(p:Page)=>{setPage(p);setSearch('');setFilterFav(false);setActionTrack(null);if(p==='albums')setSelectedAlbum(null);if(p==='artists')setSelectedArtist(null);if(p==='playlists')setSelectedPlaylist(null);if(p==='folders')setSelectedFolder(null);};
+ // The search field lives in the global header, so searching must show results
+ // from the complete library, not silently filter an unrelated current page.
+ const updateGlobalSearch=(value:string)=>{
+   setSearch(value);
+   if(value.trim() && page!=='songs'){
+     setPage('songs');
+     setFilterFav(false);
+     setActionTrack(null);
+     setSelectedPlaylist(null);
+     setSelectedAlbum(null);
+     setSelectedArtist(null);
+     setSelectedFolder(null);
+   }
+ };
  const songRow=(track:Track,index:number)=><div key={track.id} className={'song-row '+(track.id===activeId?'is-current':'')} onDoubleClick={()=>playList(visibleTracks,track.id)}>
   <button className="song-index" title="Wiedergeben" onClick={()=>playList(visibleTracks,track.id)}>{track.id===activeId&&playing?<AudioLines size={17}/>:String(index+1).padStart(2,'0')}</button>
   <div className="song-name" onClick={()=>playList(visibleTracks,track.id)} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter')playList(visibleTracks,track.id)}}><Cover track={track} size="tiny"/><div className="truncated"><strong>{track.title}</strong><span>{track.artist}</span></div></div>
@@ -267,7 +281,7 @@ export default function App(){
   <IconButton title={state.favorites.includes(track.id)?'Aus Favoriten entfernen':'Favorisieren'} onClick={()=>toggleFavorite(track.id)} active={state.favorites.includes(track.id)}><Heart size={17} fill={state.favorites.includes(track.id)?'currentColor':'none'}/></IconButton>
   <div className="row-actions"><IconButton title="Weitere Optionen" active={actionTrack===track.id} onClick={()=>setActionTrack(actionTrack===track.id?null:track.id)}><MoreHorizontal size={19}/></IconButton>{actionTrack===track.id&&<div className="context-menu"><button onClick={()=>{enqueue(track.id,true);setActionTrack(null)}}>Als Nächstes</button><button onClick={()=>{enqueue(track.id);setActionTrack(null)}}>In Warteschlange</button>{state.playlists.map(p=><button key={p.id} onClick={()=>addToPlaylist(track.id,p)}>+ {p.name}</button>)}{state.playlists.length===0&&<span className="context-hint">Erstelle zuerst eine Playlist</span>}{page==='playlists'&&selectedP&&<button onClick={()=>savePlaylist({...selectedP,trackIds:selectedP.trackIds.filter(id=>id!==track.id)})}>Aus Playlist entfernen</button>}</div>}</div>
  </div>;
- const songList=(items:Track[])=>items.length?<div className="song-table"><div className="song-header"><span>#</span><span>TITEL</span><span>ALBUM</span><span>HINZUGEFÜGT</span><Clock3 size={15}/><span/><span/></div>{items.map(songRow)}</div>:<div className="list-empty"><Music2 size={34}/><b>Hier ist es noch ruhig</b><span>Keine Songs gefunden. Passe deine Suche an oder füge Musik hinzu.</span></div>;
+ const songList=(items:Track[])=>items.length?<div className="song-table"><div className="song-header"><span>#</span><span>TITEL</span><span>ALBUM</span><span>HINZUGEFÜGT</span><Clock3 size={15}/><span/><span/></div>{items.map(songRow)}</div>:<div className="list-empty"><Music2 size={34}/><b>{search.trim()?'Keine Suchergebnisse':'Hier ist es noch ruhig'}</b><span>{search.trim()?`Keine Songs für „${search.trim()}“ gefunden. Versuche einen anderen Titel, Künstler oder Albumnamen.`:'Keine Songs gefunden. Passe deine Suche an oder füge Musik hinzu.'}</span></div>;
  const firstAlbumTrack=(key:string)=>tracks.find(t=>t.album===key);
  const firstArtistTrack=(key:string)=>tracks.find(t=>t.artist===key);
  const renderCards=(keys:string[],kind:'album'|'artist')=><div className="album-grid">{keys.filter(k=>k.toLowerCase().includes(search.toLowerCase())||tracks.some(t=>(kind==='album'?t.album:t.artist)===k&&t.title.toLowerCase().includes(search.toLowerCase()))).map(k=>{const t=kind==='album'?firstAlbumTrack(k):firstArtistTrack(k);const list=tracks.filter(x=>(kind==='album'?x.album:x.artist)===k);return <button className="album-card" key={k} onClick={()=>{if(kind==='album')setSelectedAlbum(k);else setSelectedArtist(k);}}><Cover track={t} size="large"/><b>{k}</b><span>{kind==='album'?t?.artist:`${list.length} Titel`}</span></button>})}</div>;
@@ -295,7 +309,7 @@ export default function App(){
    <button className={'sidebar-link settings-link '+(page==='settings'?'selected':'')} onClick={()=>selectPage('settings')}><Settings2 size={19}/><span>Einstellungen</span></button>
   </aside>
   <main className="content">
-   <header className="topbar"><div className="breadcrumbs"><span>MELODIFY</span><ChevronRight size={14}/><strong>{page==='settings'?'Preferences':'Bibliothek'}</strong></div><div className="top-actions"><div className="searchbox"><Search size={17}/><input aria-label="Musik durchsuchen" placeholder="Songs, Künstler, Alben suchen ..." value={search} onChange={e=>setSearch(e.target.value)} onKeyDown={e=>{if(e.key==='Escape')setSearch('')}}/>{search&&<button aria-label="Suche löschen" onClick={()=>setSearch('')}><X size={15}/></button>}<kbd>⌕</kbd></div><button className="avatar" title="Lokale Bibliothek"><Music2 size={18}/></button></div></header>
+   <header className="topbar"><div className="breadcrumbs"><span>MELODIFY</span><ChevronRight size={14}/><strong>{page==='settings'?'Preferences':'Bibliothek'}</strong></div><div className="top-actions"><div className="searchbox"><Search size={17}/><input aria-label="Musik durchsuchen" placeholder="Songs, Künstler, Alben suchen ..." value={search} onChange={e=>updateGlobalSearch(e.target.value)} onKeyDown={e=>{if(e.key==='Escape')setSearch('');if(e.key==='Enter'&&search.trim())setPage('songs');}}/>{search&&<button aria-label="Suche löschen" onClick={()=>setSearch('')}><X size={15}/></button>}<kbd>⌕</kbd></div><button className="avatar" title="Lokale Bibliothek"><Music2 size={18}/></button></div></header>
    <div className="page-scroll">
    {page==='home'&&<>
     <section className="hero"><div className="hero-copy"><div className="eyebrow"><span className="pulse-dot"/> DEIN SOUND. DEIN RAUM.</div><h1>Deine Musik.<br/><em>Dein Moment.</em></h1><p>Alles, was du liebst. An einem Ort, der sich nach dir anfühlt.</p><div className="hero-buttons"><button className="primary-button" onClick={()=>tracks.length?playList(tracks):void scan('add')}><Play size={17} fill="currentColor"/>{tracks.length?'Alle Songs abspielen':'Musik hinzufügen'}</button><button className="secondary-button" onClick={()=>void scan('add')}><Plus size={18}/>Ordner hinzufügen</button></div></div><div className="hero-art"><div className="hero-orbit orbit-one"/><div className="hero-orbit orbit-two"/><div className="hero-disc"><div className="hero-disc-inner"><Music2 size={45}/></div></div><div className="hero-caption">SOUND IS A FEELING <span>↗</span></div></div></section>
