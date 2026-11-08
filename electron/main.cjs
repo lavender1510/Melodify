@@ -1,10 +1,9 @@
-const { app, BrowserWindow, ipcMain, dialog, nativeImage, Tray, Menu, protocol, net } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, nativeImage, Tray, Menu, protocol } = require('electron');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
 const crypto = require('node:crypto');
-const { pathToFileURL } = require('node:url');
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'melodify-media', privileges: { secure: true, standard: true, stream: true, supportFetchAPI: true, corsEnabled: true } }]);
 const AUDIO_EXT = new Set(['.mp3', '.flac', '.wav', '.ogg', '.oga', '.m4a', '.aac', '.opus']);
@@ -106,41 +105,66 @@ async function mediaHandler(request) {
 
 async function serveFile(file, request) {
   try {
+    const stat = await fsp.stat(file);
     await fsp.access(file, fs.constants.R_OK);
+    if (!stat.isFile() || stat.size === 0) {
+      return new Response('Empty or unavailable audio file', {status: 404});
+    }
+
     const extension = path.extname(file).toLowerCase();
-    const headers = new Headers(request.headers);
-    headers.delete('host');
-    headers.delete('origin');
-
-    // Delegate file delivery to Chromium's native file loader. This preserves
-    // Range requests used by HTMLAudioElement and avoids a hand-built stream
-    // Response that Chromium may reject as an unsupported media source.
-    const response = await net.fetch(pathToFileURL(file).toString(), {
-      method: request.method === 'HEAD' ? 'HEAD' : 'GET',
-      headers
+    const headers = new Headers({
+      'Content-Type': MIME[extension] || 'application/octet-stream',
+      'Accept-Ranges': 'bytes',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET,HEAD,OPTIONS',
+      'Access-Control-Allow-Headers': 'Range,Content-Type',
+      'Access-Control-Expose-Headers': 'Accept-Ranges,Content-Length,Content-Range,Content-Type',
+      'Cache-Control': 'no-store'
     });
+    let start = 0;
+    let end = stat.size - 1;
+    let status = 200;
+    const requestedRange = request.headers.get('range');
+    if (requestedRange) {
+      const match = /^bytes=(\d*)-(\d*)$/.exec(requestedRange.trim());
+      if (!match || (!match[1] && !match[2])) {
+        headers.set('Content-Range', `bytes */${stat.size}`);
+        return new Response(null, {status: 416, headers});
+      }
+      if (!match[1]) {
+        const suffix = Number(match[2]);
+        if (!Number.isSafeInteger(suffix) || suffix <= 0) {
+          headers.set('Content-Range', `bytes */${stat.size}`);
+          return new Response(null, {status: 416, headers});
+        }
+        start = Math.max(0, stat.size - suffix);
+      } else {
+        start = Number(match[1]);
+        if (match[2]) end = Number(match[2]);
+      }
+      if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) ||
+          start >= stat.size || start > end) {
+        headers.set('Content-Range', `bytes */${stat.size}`);
+        return new Response(null, {status: 416, headers});
+      }
+      end = Math.min(end, stat.size - 1);
+      status = 206;
+      headers.set('Content-Range', `bytes ${start}-${end}/${stat.size}`);
+    }
+    headers.set('Content-Length', String(end - start + 1));
+    if (request.method === 'HEAD') return new Response(null, {status, headers});
 
-    const responseHeaders = new Headers(response.headers);
-    responseHeaders.set('Content-Type', MIME[extension] || responseHeaders.get('content-type') || 'application/octet-stream');
-    responseHeaders.set('Access-Control-Allow-Origin', '*');
-    responseHeaders.set('Access-Control-Allow-Methods', 'GET,HEAD,OPTIONS');
-    responseHeaders.set('Access-Control-Allow-Headers', 'Range,Content-Type');
-    responseHeaders.set('Access-Control-Expose-Headers', 'Accept-Ranges,Content-Length,Content-Range,Content-Type');
-    responseHeaders.set('Cache-Control', 'no-store');
-
-    return new Response(request.method === 'HEAD' ? null : response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: responseHeaders
-    });
+    // Stream exact byte ranges: Chromium seeks and probes media files using
+    // Range requests. Always returning 200 can make valid MP3s fail to load.
+    const {Readable} = require('node:stream');
+    const stream = fs.createReadStream(file, {start, end});
+    return new Response(Readable.toWeb(stream), {status, headers});
   } catch (error) {
     console.error('[Melodify] unable to serve media file:', file, error);
     return new Response('File unavailable', {
       status: 404,
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Access-Control-Allow-Origin': '*'
-      }
+      headers: {'Content-Type': 'text/plain; charset=utf-8',
+                'Access-Control-Allow-Origin': '*'}
     });
   }
 }
@@ -164,6 +188,24 @@ function createWindow() {
 app.whenReady().then(async()=> {
   if (process.platform==='win32') app.setAppUserModelId('dev.lyvt.melodify');
   await restore(); protocol.handle('melodify-media',mediaHandler);createWindow();createTray();
+  ipcMain.handle('media:diagnose', async (_event, id) => {
+    if (typeof id !== 'string' || !/^[a-f0-9]{24}$/.test(id)) return {ok:false,reason:'Ungültige Titel-ID.'};
+    const file = mediaFiles.get(id);
+    if (!file) return {ok:false,reason:'Titel ist nicht in der Medienbibliothek registriert. Bitte Bibliothek neu scannen.'};
+    try {
+      const stat = await fsp.stat(file);
+      await fsp.access(file, fs.constants.R_OK);
+      if (!stat.isFile() || !stat.size) return {ok:false,reason:'Die Musikdatei ist leer oder keine reguläre Datei.'};
+      return {ok:true,format:path.extname(file).slice(1).toUpperCase(),size:stat.size};
+    } catch (error) {
+      const code = error && error.code;
+      return {ok:false,reason:code === 'ENOENT'
+        ? 'Die Musikdatei wurde verschoben oder gelöscht. Bitte Bibliothek neu scannen.'
+        : code === 'EACCES' || code === 'EPERM'
+          ? 'Kein Lesezugriff auf die Musikdatei. Prüfe die Windows-Dateiberechtigungen.'
+          : 'Die Musikdatei ist nicht lesbar. Prüfe den Datenträger und scanne erneut.'};
+    }
+  });
   ipcMain.handle('state:load',()=>state);
   ipcMain.handle('state:save',async(_event,patch)=>{
     // Nur zugelassene Präferenzen und benutzerdefinierte Sammlungen übernehmen.
