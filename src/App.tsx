@@ -97,16 +97,12 @@ export default function App(){
  const notify=(message:string)=>{setToast(message);};
  useEffect(()=>{if(!toast)return;const timer=setTimeout(()=>setToast(''),3400);return()=>clearTimeout(timer);},[toast]);
  useEffect(()=>{
-  const started=performance.now();
-  let cancelled=false;
-  const hide=()=>{const remaining=Math.max(0,750-(performance.now()-started));window.setTimeout(()=>{if(!cancelled)setSplash(false);},remaining);};
-  if(!loading)hide();
-  else{
-    const fallback=window.setTimeout(()=>{if(!cancelled)setSplash(false);},2200);
-    return()=>{cancelled=true;window.clearTimeout(fallback);};
-  }
-  return()=>{cancelled=true};
-},[loading]);
+  if (loading) return;
+  // Splash remains visible while the library initializes; animate the exit
+  // only when the main UI is ready, rather than fading out on a fixed clock.
+  const timer=window.setTimeout(()=>setSplash(false),900);
+  return()=>window.clearTimeout(timer);
+ },[loading]);
  useEffect(()=>{audio.current.crossOrigin='anonymous';audio.current.preload='auto';},[]);
  useEffect(()=>{window.melodify?.load().then(s=>setState(s)).catch(()=>notify('Bibliothek konnte nicht geladen werden.')).finally(()=>setLoading(false));const unsub=window.melodify?.onScanProgress(p=>setScanProgress(p));return()=>unsub?.();},[]);
  const persist=(patch:Partial<AppState>)=>{setState(prev=>({...prev,...patch,settings:patch.settings||prev.settings}));window.melodify?.save(patch).catch(()=>notify('Speichern fehlgeschlagen.'));};
@@ -179,6 +175,12 @@ export default function App(){
   if(order && order.length){queueRef.current=order;setQueue(order);}else if(queueRef.current.length===0){queueRef.current=[id];setQueue([id]);}
   activeRef.current=id;setActiveId(id);setPosition(0);setAudioError('');
   const a=audio.current;
+  const diagnosis=await window.melodify?.diagnoseMedia(id);
+  if (diagnosis && !diagnosis.ok) {
+    setPlaying(false);
+    setAudioError(`„${track.title}“: ${diagnosis.reason || 'Datei nicht verfügbar.'}`);
+    return;
+  }
   a.pause();
   a.currentTime=0;
   a.src=songUrl(id);
@@ -197,7 +199,10 @@ export default function App(){
   }catch(err){
     setPlaying(false);
     const detail=err instanceof Error?err.message:String(err);
-    setAudioError(`Wiedergabe fehlgeschlagen (${track.format}): ${detail}`);
+    const reason=a.error?.code===MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED
+      ? 'Die Audiodatei kann nicht geladen oder dekodiert werden. Prüfe, ob die Datei beschädigt ist oder der Codec unterstützt wird.'
+      : detail;
+    setAudioError(`„${track.title}“ (${track.format}): ${reason}`);
     console.error('[Melodify] playback failed',err);
   }
  },[prepareAudio]);
@@ -270,10 +275,10 @@ export default function App(){
  const dragFrom=useRef<number|null>(null);
  const [repeatIcon,setRepeatIcon]=useState(false);useEffect(()=>setRepeatIcon(repeat==='one'),[repeat]);
  return <div className={'app '+(isLight(theme)?'light':'')} style={style}>
-  {splash&&<div className="melodify-splash" role="status" aria-label="Melodify wird gestartet"><img src="./melodify-logo.png" alt="Melodify"/><span>MELODIFY</span></div>}
-  {playlistDialog&&<div className="modal-overlay" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setPlaylistDialog(false)}}><form className="playlist-dialog" onSubmit={e=>{e.preventDefault();confirmPlaylist()}}><img src="./melodify-logo.png" alt=""/><h2>Neue Playlist</h2><p>Gib deiner Sammlung einen Namen.</p><input autoFocus maxLength={100} value={playlistName} onChange={e=>setPlaylistName(e.target.value)} placeholder="z. B. Late Night Drives" aria-label="Playlistname"/><div className="dialog-actions"><button type="button" className="secondary-button" onClick={()=>setPlaylistDialog(false)}>Abbrechen</button><button className="primary-button" type="submit" disabled={!playlistName.trim()}>Erstellen</button></div></form></div>}
+  {splash&&<div className="melodify-splash" role="status" aria-label="Melodify wird gestartet"><img src={new URL("./melodify-logo.png", document.baseURI).href} alt="Melodify"/><span>MELODIFY</span></div>}
+  {playlistDialog&&<div className="modal-overlay" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setPlaylistDialog(false)}}><form className="playlist-dialog" onSubmit={e=>{e.preventDefault();confirmPlaylist()}}><img src={new URL("./melodify-logo.png", document.baseURI).href} alt=""/><h2>Neue Playlist</h2><p>Gib deiner Sammlung einen Namen.</p><input autoFocus maxLength={100} value={playlistName} onChange={e=>setPlaylistName(e.target.value)} placeholder="z. B. Late Night Drives" aria-label="Playlistname"/><div className="dialog-actions"><button type="button" className="secondary-button" onClick={()=>setPlaylistDialog(false)}>Abbrechen</button><button className="primary-button" type="submit" disabled={!playlistName.trim()}>Erstellen</button></div></form></div>}
   <div className="background-wallpaper"/><div className="app-shell">
-  <aside className="sidebar"><button className="brand" onClick={()=>selectPage('home')}><div className="brand-mark"><img src="./melodify-logo.png" alt="Melodify"/></div><span>melodify<span className="brand-dot">.</span></span></button>
+  <aside className="sidebar"><button className="brand" onClick={()=>selectPage('home')}><div className="brand-mark"><img src={new URL("./melodify-logo.png", document.baseURI).href} alt="Melodify"/></div><span>melodify<span className="brand-dot">.</span></span></button>
    <div className="sidebar-group"><div className="sidebar-label">ENTDECKEN</div>
     {([[Home,'Startseite','home'],[Library,'Alle Songs','songs'],[Album,'Alben','albums'],[Headphones,'Künstler','artists'],[Folder,'Ordner','folders']] as const).map(([Icon,label,p])=><button key={p} className={'sidebar-link '+(page===p?'selected':'')} onClick={()=>selectPage(p)}><Icon size={19} strokeWidth={1.8}/><span>{label}</span>{p==='songs'&&<span className="nav-count">{tracks.length}</span>}</button>)}
    </div><div className="sidebar-group"><div className="sidebar-label">DEINE SAMMLUNG</div>
