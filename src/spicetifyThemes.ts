@@ -122,6 +122,22 @@ text|FlexokiDark|100f0f|100f0f|100f0f|cecdc3|878580|3aa99f
 text|BloodMoon|0d0d0f|0d0d0f|0d0d0f|f4ecec|b59b9e|ff2244
 `.trim();
 
+// Keep the original palette as closely as possible, but choose readable
+// foreground text where source schemes were designed for Spotify-specific UI.
+const luminance = (hex:string) => {
+  const rgb=[1,3,5].map(i => parseInt(hex.slice(i,i+2),16)/255).map(v => v<=.04045?v/12.92:Math.pow((v+.055)/1.055,2.4));
+  return .2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];
+};
+const contrast = (a:string,b:string) => {
+  const x=luminance(a), y=luminance(b);
+  return (Math.max(x,y)+.05)/(Math.min(x,y)+.05);
+};
+function legibleText(value:string,background:string,minimum=4.5) {
+  if (contrast(value,background)>=minimum) return value;
+  const dark='#17151c', light='#fffaff';
+  return contrast(dark,background)>contrast(light,background)?dark:light;
+}
+
 export const spicetifyThemes:Theme[] = colors.split('\n').map(line => {
   const [family, variant, background, surface, panel, text, muted, accent] = line.split('|');
   const hex = (value:string) => '#' + value;
@@ -130,7 +146,7 @@ export const spicetifyThemes:Theme[] = colors.split('\n').map(line => {
     name: family + ' · ' + variant,
     description: 'Spicetify · ' + family,
     background: hex(background), surface: hex(surface), panel: hex(panel),
-    text: hex(text), muted: hex(muted), accent: hex(accent),
+    text: legibleText(hex(text),hex(background)), muted: legibleText(hex(muted),hex(background),3), accent: hex(accent),
     radius: 15, transparency: 0
   };
 });
