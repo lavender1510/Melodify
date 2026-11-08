@@ -11,7 +11,7 @@
     "dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env MELODIFY_DEV_URL=http://127.0.0.1:5173 electron .\"",
     "build": "tsc --noEmit && vite build",
     "dist:win": "npm run build && electron-builder --win nsis portable --x64",
-    "test": "vitest run",
+    "test": "vitest run && node --test electron/media-server.test.cjs",
     "test:audio": "electron --no-sandbox electron/audio-smoke.cjs"
   },
   "dependencies": {
