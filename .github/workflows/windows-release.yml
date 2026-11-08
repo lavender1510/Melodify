@@ -43,17 +43,36 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Cache Electron and electron-builder tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\electron
+            ~\AppData\Local\electron-builder\Cache
+          key: windows-electron-builder-${{ hashFiles('package.json') }}
+          restore-keys: |
+            windows-electron-builder-
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Test and build
         run: |
           npm test
           npm run build
-          npm run test:audio
       - name: Build Windows installer and portable app
-        run: npx electron-builder --win nsis portable --x64 --publish never
+        shell: pwsh
+        run: |
+          $attempt = 0
+          do {
+            $attempt++
+            npx electron-builder --win nsis portable --x64 --publish never
+            if ($LASTEXITCODE -eq 0) { exit 0 }
+            if ($attempt -lt 3) { Start-Sleep -Seconds 15 }
+          } while ($attempt -lt 3)
+          exit $LASTEXITCODE
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Verify packaged Electron audio pipeline
+        run: npm run test:audio
       - name: Upload executables
         uses: actions/upload-artifact@v4
         with:
