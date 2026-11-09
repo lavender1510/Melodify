@@ -1,0 +1,4 @@
+import {expect,it} from 'vitest';import {moveItem,playlistIds} from './playlists';import type {Track} from './types';
+it('manual playlist order and repeated IDs survive rendering resolution',()=>{const p={id:'p',name:'p',createdAt:1,trackIds:['c','a','a','missing','b']};expect(playlistIds(p,{tracks:[],favorites:[]})).toEqual(p.trackIds);expect(moveItem(p.trackIds,0,4)).toEqual(['a','a','missing','b','c']);expect(p.trackIds[0]).toBe('c');});
+it('invalid moves cannot drop entries',()=>{const ids=['a','b'];expect(moveItem(ids,-1,0)).toBe(ids);expect(moveItem(ids,0,2)).toBe(ids);});
+it('smart collections recompute from local state',()=>{const p={id:'p',name:'p',createdAt:1,trackIds:[]};const state={favorites:['x'],tracks:[{id:'a',addedAt:1},{id:'b',addedAt:2}] as Track[]};expect(playlistIds({...p,rule:'favorites'},state)).toEqual(['x']);expect(playlistIds({...p,rule:'recent'},state)).toEqual(['b','a']);});

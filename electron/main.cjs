@@ -2,40 +2,42 @@ const { app, BrowserWindow, ipcMain, dialog, nativeImage, Tray, Menu, protocol }
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
-const os = require('node:os');
 const crypto = require('node:crypto');
+// Explicit CLI profiles also let desktop tests run without touching personal data.
+const profile=app.commandLine.getSwitchValue('user-data-dir');
+if(profile)app.setPath('userData',path.resolve(profile));
+const primaryInstance=app.requestSingleInstanceLock();
+if(!primaryInstance){app.quit();process.exit(0);}
+app.on('second-instance',()=>{if(win){if(win.isMinimized())win.restore();win.show();win.focus();}});
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'melodify-media', privileges: { secure: true, standard: true, stream: true, supportFetchAPI: true, corsEnabled: true } }]);
-const AUDIO_EXT = new Set(['.mp3', '.flac', '.wav', '.ogg', '.oga', '.m4a', '.aac', '.opus']);
+const {parseM3U,encodeM3U}=require('./playlists.cjs');
+const {FolderWatcher}=require('./watch-folders.cjs');
+const {StateStore,validate} = require('./state-store.cjs');
+const {discover,mergeScan} = require('./library.cjs');
 const {serveFile} = require('./media-server.cjs');
 const defaults = () => ({ folders: [], tracks: [], playlists: [], favorites: [], favoritePlaylists: [], customThemes: [], themeId: 'nocturne', settings: { volume: .75, balance: 0, equalizer: [0,0,0,0,0,0,0,0,0,0], eqPreset:'flat', normalize: false, gain: 0, visualization:true, minimizeToTray:false, outputDevice:'default' } });
-let state, win, tray, quitting = false, scanning = false;
+let state, win, tray, quitting = false, scanning = false, scanController, store, watcher;
 const mediaFiles = new Map();
 const storeFile = () => path.join(app.getPath('userData'), 'library.json');
 const artDir = () => path.join(app.getPath('userData'), 'covers');
-const saveState = async () => { const p = storeFile(); await fsp.mkdir(path.dirname(p),{recursive:true}); const temp=p+'.tmp'; await fsp.writeFile(temp,JSON.stringify(state,null,2),'utf8'); await fsp.rename(temp,p); };
-const safeArray = (a, max=50000) => Array.isArray(a) ? a.slice(0,max) : [];
+const saveState = () => store.save(state);
+function handle(channel,callback){ipcMain.handle(channel,(event,...args)=>{if(event.sender!==win?.webContents || event.senderFrame!==win.webContents.mainFrame)throw new Error('Unzulässiger IPC-Absender.');return callback(event,...args);});}
 function registerMedia() {
-  mediaFiles.clear(); for (const track of state.tracks) { if (track.id && track.path) mediaFiles.set(track.id,track.path); }
+  mediaFiles.clear(); for (const track of state.tracks) mediaFiles.set(track.id,track.path);
 }
-async function restore() { try { const raw = JSON.parse(await fsp.readFile(storeFile(),'utf8')); const def=defaults(); state={...def,...raw, folders:safeArray(raw.folders,200), tracks:safeArray(raw.tracks), playlists:safeArray(raw.playlists,1000), favorites:safeArray(raw.favorites), favoritePlaylists:safeArray(raw.favoritePlaylists), customThemes:safeArray(raw.customThemes,100), settings:{...def.settings,...raw.settings}}; } catch { state=defaults(); } registerMedia(); }
+async function restore() {
+  store=new StateStore(storeFile(),defaults);
+  state=await store.load(); registerMedia();
+}
+const publicState = () => ({...state, storageError:store.status});
+function ensureWritable() { if(store.blocked) throw new Error(store.status); }
 const idFor = p => crypto.createHash('sha256').update(path.resolve(p).toLowerCase()).digest('hex').slice(0,24);
 function notifyProgress(payload) { if (win && !win.isDestroyed()) win.webContents.send('scan:progress',payload); }
-async function listFiles(folder, out, count = {n:0}) {
-  if (count.n > 150000) return;
-  let entries; try { entries = await fsp.readdir(folder,{withFileTypes:true}); } catch { return; }
-  for (const entry of entries) {
-    if (count.n++ > 150000) break;
-    const p=path.join(folder,entry.name);
-    // Symbolische Links absichtlich nicht verfolgen (Zyklen vermeiden).
-    if (entry.isDirectory()) await listFiles(p,out,count);
-    else if (entry.isFile() && AUDIO_EXT.has(path.extname(entry.name).toLowerCase())) out.push(p);
-  }
-}
 async function readTrack(p, known) {
   try {
     const stat=await fsp.stat(p); const id=idFor(p);
-    if (known && known.size===stat.size && known.modified===stat.mtimeMs) return known;
+    if (known && known.size===stat.size && known.modified===stat.mtimeMs) return {...known,missing:false};
     const { parseFile } = await import('music-metadata');
     const { common, format } = await parseFile(p,{ duration:true });
     let cover = false;
@@ -50,23 +52,46 @@ async function readTrack(p, known) {
         try { const src=path.join(base,candidate); const st=await fsp.stat(src); if(st.isFile() && st.size<12*1024*1024) { await fsp.mkdir(artDir(),{recursive:true}); const ext=path.extname(src); await fsp.copyFile(src,path.join(artDir(),id+ext)); cover=true; break; } } catch { /* Kein Cover vorhanden */ }
       }
     }
-    return { id, path:p, title: String(common.title || path.parse(p).name), artist: String(common.artist || 'Unbekannter Interpret'), album: String(common.album || 'Unbekanntes Album'), duration: Number(format.duration || 0), year: common.year || null, trackNo:common.track?.no || null, cover, size: stat.size, modified:stat.mtimeMs, addedAt:known?.addedAt || Date.now(), format: path.extname(p).slice(1).toUpperCase() };
+    return { id, path:p, title: String(common.title || path.parse(p).name), artist: String(common.artist || 'Unbekannter Interpret'), album: String(common.album || 'Unbekanntes Album'), genre:(common.genre||[]).join(', '), duration: Number(format.duration || 0), year: common.year || null, trackNo:common.track?.no || null, cover, size: stat.size, modified:stat.mtimeMs, addedAt:known?.addedAt || Date.now(), format: path.extname(p).slice(1).toUpperCase() };
   } catch (e) {
     // Ungültige Audiodateien trotzdem in der Bibliothek anzeigen.
     try { const st=await fsp.stat(p); const id=idFor(p); return {id,path:p,title:path.parse(p).name,artist:'Unbekannter Interpret',album:'Unbekanntes Album',duration:0,year:null,trackNo:null,cover:false,size:st.size,modified:st.mtimeMs,addedAt:known?.addedAt||Date.now(),format:path.extname(p).slice(1).toUpperCase(),readError:true}; } catch { return null; }
   }
 }
-async function scan() {
-  if (scanning) return {busy:true,tracks:state.tracks}; scanning=true;
+async function scan(folder) {
+  ensureWritable();
+  if (scanning) return {busy:true,tracks:state.tracks};
+  if(folder !== undefined && !state.folders.includes(folder)) throw new Error('Unbekannter Musikordner.');
+  scanning=true; scanController=new AbortController();
+  const signal=scanController.signal, folders=folder?[folder]:[...state.folders];
   try {
     notifyProgress({stage:'scan',current:0,total:0});
-    const paths=[]; for (const folder of state.folders) await listFiles(folder,paths);
-    const unique=[...new Set(paths)]; const existing=new Map(state.tracks.map(t=>[t.path,t])); const next=[];
-    // In kleinen Batches parsen, um UI und Datenträger nicht zu blockieren.
-    for(let i=0;i<unique.length;i+=4) { const results=await Promise.all(unique.slice(i,i+4).map(p=>readTrack(p,existing.get(p)))); next.push(...results.filter(Boolean)); if(i%24===0 || i+4>=unique.length) notifyProgress({stage:'scan',current:Math.min(i+4,unique.length),total:unique.length}); }
-    state.tracks=next.sort((a,b)=>a.title.localeCompare(b.title,'de')); registerMedia(); await saveState(); notifyProgress({stage:'done',current:unique.length,total:unique.length}); return {tracks:state.tracks};
-  } catch(err) { notifyProgress({stage:'error',message:err.message}); return {error:err.message,tracks:state.tracks}; }
-  finally {scanning=false;}
+    const paths=new Set(), errors=[];
+    for (const directory of folders) await discover(directory,signal,errors,paths);
+    const unique=[...paths], existing=new Map(state.tracks.map(t=>[t.path,t])), next=[];
+    for(let i=0;i<unique.length;i+=4) {
+      signal.throwIfAborted();
+      const results=await new Promise((resolve,reject)=>{
+        const cleanup=()=>{clearTimeout(timer);signal.removeEventListener('abort',abort);};
+        const abort=()=>{cleanup();reject(signal.reason);};
+        const timer=setTimeout(()=>{cleanup();reject(new Error('Metadaten-Lesezeit überschritten. Scan wurde ohne Bibliotheksänderung beendet.'));},15000);
+        signal.addEventListener('abort',abort,{once:true});
+        Promise.all(unique.slice(i,i+4).map(p=>readTrack(p,existing.get(p)))).then(v=>{cleanup();resolve(v);},e=>{cleanup();reject(e);});
+      });
+      next.push(...results.filter(Boolean));
+      notifyProgress({stage:'scan',current:Math.min(i+4,unique.length),total:unique.length});
+    }
+    signal.throwIfAborted();
+    // Keep references and metadata when a source disappears. Partial scans retain other roots.
+    state={...state,tracks:mergeScan(state.tracks,next,folders,errors),folderStatus:{...state.folderStatus,...Object.fromEntries(folders.map(f=>[f,{scannedAt:Date.now(),errors:errors.filter(e=>e.startsWith(f)),status:errors.some(e=>e.startsWith(f))?'error':'ready'}]))}};
+    registerMedia(); await saveState();
+    notifyProgress({stage:'done',current:unique.length,total:unique.length,message:errors.join('\n')});
+    return {tracks:state.tracks,errors};
+  } catch(err) {
+    const cancelled=signal.aborted;
+    notifyProgress({stage:cancelled?'cancelled':'error',message:cancelled?'Scan abgebrochen. Bibliothek unverändert.':err.message});
+    return {cancelled,error:cancelled?undefined:err.message,tracks:state.tracks};
+  } finally {scanning=false;scanController=null;}
 }
 async function mediaHandler(request) {
   try {
@@ -112,18 +137,31 @@ function createTray() {
   tray.setContextMenu(Menu.buildFromTemplate([{label:'Melodify öffnen',click:()=>win?.show()},{label:'Beenden',click:()=>{quitting=true;app.quit();}}]));tray.on('double-click',()=>win?.show());
 }
 function createWindow() {
-  win=new BrowserWindow({width:1350,height:850,minWidth:900,minHeight:610,backgroundColor:'#0c0e13',title:'Melodify',icon:fs.existsSync(path.join(app.getAppPath(),'build','icon.ico')) ? path.join(app.getAppPath(),'build','icon.ico') : (fs.existsSync(path.join(app.getAppPath(),'public','melodify-logo.png')) ? path.join(app.getAppPath(),'public','melodify-logo.png') : undefined),show:false,autoHideMenuBar:true,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:false,webSecurity:true}});
+  win=new BrowserWindow({width:1350,height:850,minWidth:900,minHeight:610,backgroundColor:'#0c0e13',title:'Melodify',icon:fs.existsSync(path.join(app.getAppPath(),'build','icon.ico')) ? path.join(app.getAppPath(),'build','icon.ico') : (fs.existsSync(path.join(app.getAppPath(),'public','melodify-logo.png')) ? path.join(app.getAppPath(),'public','melodify-logo.png') : undefined),show:false,autoHideMenuBar:true,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true}});
   win.once('ready-to-show',()=>win.show());
-  win.on('close',event=>{if(!quitting && state.settings.minimizeToTray && tray){event.preventDefault();win.hide();}});
+  let closeReady=false, closePending=false, closeTimer;
+  const finishClose=()=>{if(closeReady)return;closeReady=true;clearTimeout(closeTimer);store.flush().finally(()=>{if(!win.isDestroyed())win.close();});};
+  const ack=(event,saved=true)=>{if(event.sender!==win.webContents||event.senderFrame!==win.webContents.mainFrame)return;if(!saved){clearTimeout(closeTimer);closePending=false;quitting=false;return;}finishClose();};
+  ipcMain.on('session:closed',ack);
+  win.on('closed',()=>{clearTimeout(closeTimer);ipcMain.removeListener('session:closed',ack);});
+  win.on('close',event=>{
+    if(!quitting && state.settings.minimizeToTray && tray){event.preventDefault();win.hide();return;}
+    if(closeReady)return;
+    event.preventDefault();if(closePending)return;closePending=true;scanController?.abort();
+    win.webContents.send('session:closing');closeTimer=setTimeout(finishClose,3000);
+  });
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
-  win.webContents.on('will-navigate',(event,url)=>{ const local=process.env.MELODIFY_DEV_URL || 'file://';if(!url.startsWith(local)) event.preventDefault();});
+  win.webContents.on('will-navigate',(event,url)=>{ const target=process.env.MELODIFY_DEV_URL || require('node:url').pathToFileURL(path.join(__dirname,'../dist/index.html')).href;if(url!==target) event.preventDefault();});
   if(process.env.MELODIFY_DEV_URL) win.loadURL(process.env.MELODIFY_DEV_URL);
   else win.loadFile(path.join(__dirname,'../dist/index.html'));
 }
 app.whenReady().then(async()=> {
   if (process.platform==='win32') app.setAppUserModelId('dev.lyvt.melodify');
-  await restore(); protocol.handle('melodify-media',mediaHandler);createWindow();createTray();
-  ipcMain.handle('media:diagnose', async (_event, id) => {
+  await restore(); watcher=new FolderWatcher(folder=>scan(folder),(folder,error)=>{
+    if(folder){state={...state,watchFolders:(state.watchFolders||[]).filter(f=>f!==folder),folderStatus:{...state.folderStatus,[folder]:{status:'error',scannedAt:Date.now(),errors:[error.message]}}};void saveState().catch(()=>notifyProgress({stage:'error',message:'Der Überwachungsfehler konnte nicht gespeichert werden.'}));}
+    notifyProgress({stage:'error',message:`Ordnerüberwachung ${folder}: ${error.message}`});
+  });if(!store.blocked)watcher.configure(state.watchFolders||[]); protocol.handle('melodify-media',mediaHandler);createWindow();createTray();
+  handle('media:diagnose', async (_event, id) => {
     if (typeof id !== 'string' || !/^[a-f0-9]{24}$/.test(id)) return {ok:false,reason:'Ungültige Titel-ID.'};
     const file = mediaFiles.get(id);
     if (!file) return {ok:false,reason:'Titel ist nicht in der Medienbibliothek registriert. Bitte Bibliothek neu scannen.'};
@@ -141,26 +179,51 @@ app.whenReady().then(async()=> {
           : 'Die Musikdatei ist nicht lesbar. Prüfe den Datenträger und scanne erneut.'};
     }
   });
-  ipcMain.handle('state:load',()=>state);
-  ipcMain.handle('state:save',async(_event,patch)=>{
-    // Nur zugelassene Präferenzen und benutzerdefinierte Sammlungen übernehmen.
-    if(patch && typeof patch==='object') {
-      for(const key of ['playlists','favorites','favoritePlaylists','customThemes']) if(Array.isArray(patch[key])) state[key]=safeArray(patch[key],key==='playlists'?1000:50000);
-      if(typeof patch.themeId==='string') state.themeId=patch.themeId.slice(0,120);
-      if(patch.settings && typeof patch.settings==='object') state.settings={...state.settings,...patch.settings};
-    }
-    await saveState();return state;
+  handle('state:load',()=>publicState());
+  handle('state:recover',async()=>{if(scanning)throw new Error('Bitte zuerst den Scan abbrechen.');state=await store.recover();registerMedia();watcher.configure(state.watchFolders||[]);return publicState();});
+  handle('state:save',async(_event,patch)=>{
+    ensureWritable();
+    if(!patch || typeof patch!=='object' || Array.isArray(patch)) throw new Error('Ungültige Daten.');
+    const allowed={};
+    for(const key of ['playlists','favorites','favoritePlaylists','customThemes','themeId','session']) if(Object.hasOwn(patch,key)) allowed[key]=patch[key];
+    if(Object.hasOwn(patch,'settings')) allowed.settings={...state.settings,...patch.settings};
+    const candidate=validate({...state,...allowed},defaults);
+    state=candidate; await saveState();return {ok:true};
   });
-  ipcMain.handle('library:add-folder',async()=>{ const result=await dialog.showOpenDialog(win,{title:'Musikordner auswählen',properties:['openDirectory','multiSelections']}); if(!result.canceled){state.folders=[...new Set([...state.folders,...result.filePaths])];await saveState();return scan();}return {cancelled:true};});
-  ipcMain.handle('library:rescan',()=>scan());
-  ipcMain.handle('settings:tray',async(_e,v)=>{state.settings.minimizeToTray=Boolean(v); await saveState();return true;});
-  ipcMain.handle('window:show',()=>win?.show());
-  ipcMain.handle('playlists:import',async()=>{
-    const result=await dialog.showOpenDialog(win,{title:'Playlist importieren',properties:['openFile','multiSelections'],filters:[{name:'M3U Playlists',extensions:['m3u','m3u8']}]}); if(result.canceled)return [];
-    const imported=[];const tracksByPath=new Map(state.tracks.map(t=>[path.normalize(t.path).toLowerCase(),t.id]));
-    for(const file of result.filePaths){try {const content=await fsp.readFile(file,'utf8');const songIds=[];for(const line of content.replace(/^\uFEFF/,'').split(/\r?\n/)){const entry=line.trim();if(!entry || entry.startsWith('#') || /^(https?:|[a-z]+:\/\/)/i.test(entry))continue;const absolute=path.isAbsolute(entry)?entry:path.resolve(path.dirname(file),entry);const id=tracksByPath.get(path.normalize(absolute).toLowerCase());if(id)songIds.push(id);}const item={id:crypto.randomUUID(),name:path.parse(file).name,trackIds:songIds,createdAt:Date.now()};state.playlists.push(item);imported.push(item);}catch{ /* Fehlerhafte M3U ignorieren */ }}await saveState();return imported;
+  handle('library:add-folder',async()=>{ ensureWritable(); if(scanning)throw new Error('Bitte laufenden Scan abwarten oder abbrechen.'); const result=await dialog.showOpenDialog(win,{title:'Musikordner auswählen',properties:['openDirectory','multiSelections']}); if(!result.canceled){state.folders=[...new Set([...state.folders,...result.filePaths])];await saveState();return scan();}return {cancelled:true};});
+  handle('library:rescan',(_event,folder)=>scan(folder));
+  handle('library:watch',async(_event,folder,enabled)=>{ensureWritable();if(!state.folders.includes(folder)||typeof enabled!=='boolean')throw new Error('Ungültiger Musikordner.');state={...state,watchFolders:enabled?[...new Set([...(state.watchFolders||[]),folder])]:(state.watchFolders||[]).filter(f=>f!==folder)};await saveState();watcher.configure(state.watchFolders);return publicState();});
+  handle('library:cancel',()=>{scanController?.abort();return true;});
+  handle('library:remove',async(_event,folder)=>{
+    ensureWritable(); if(scanning)throw new Error('Bitte laufenden Scan zuerst abbrechen.');
+    if(typeof folder!=='string' || !state.folders.includes(folder))throw new Error('Unbekannter Musikordner.');
+    // Remove the source only, never music files, metadata, favorites or playlist links.
+    state={...state,folders:state.folders.filter(f=>f!==folder),watchFolders:(state.watchFolders||[]).filter(f=>f!==folder)};watcher.configure(state.watchFolders);await saveState();return publicState();
+  });
+  handle('playlists:export',async(_event,id)=>{
+    const playlist=state.playlists.find(p=>p.id===id);if(!playlist)throw new Error('Unbekannte Playlist.');
+    const result=await dialog.showSaveDialog(win,{title:'Playlist exportieren',defaultPath:playlist.name.replace(/[<>:"/\\|?*]/g,'_')+'.m3u8',filters:[{name:'M3U8 / M3U',extensions:['m3u8','m3u']}]});
+    if(result.canceled)return false;
+    await fsp.writeFile(result.filePath,encodeM3U(playlist,state),'utf8');return true;
+  });
+  handle('settings:tray',async(_e,v)=>{ensureWritable();if(typeof v!=='boolean')throw new Error('Ungültige Einstellung.');state.settings.minimizeToTray=v; await saveState();return true;});
+  handle('window:show',()=>win?.show());
+  handle('playlists:import',async()=>{
+    ensureWritable();
+    const result=await dialog.showOpenDialog(win,{title:'Playlist importieren',properties:['openFile','multiSelections'],filters:[{name:'M3U Playlists',extensions:['m3u','m3u8']}]}); if(result.canceled)return {playlists:[],warnings:[]};
+    const imported=[],errors=[];
+    for(const file of result.filePaths){
+      try {
+        const {ids,unmatched,remote}=parseM3U(await fsp.readFile(file,'utf8'),file,state.tracks);
+        const item={id:crypto.randomUUID(),name:path.parse(file).name,trackIds:ids,createdAt:Date.now()};
+        state.playlists.push(item);imported.push(item);
+        if(unmatched||remote)errors.push(`${item.name}: ${unmatched} lokale Einträge nicht gefunden; ${remote} Online-Einträge übersprungen.`);
+      }catch(error){errors.push(`${path.basename(file)}: ${error.message}`);}
+    }
+    await saveState();return {playlists:imported,warnings:errors};
+
   });
 });
-app.on('before-quit',()=>{quitting=true;});
+app.on('before-quit',()=>{quitting=true;watcher?.close();scanController?.abort();});
 app.on('window-all-closed',()=>{if(process.platform!=='darwin')app.quit();});
 app.on('activate',()=>{if(BrowserWindow.getAllWindows().length===0)createWindow();else win?.show();});
