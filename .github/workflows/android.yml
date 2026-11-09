@@ -52,7 +52,11 @@ jobs:
           profile: pixel_6
           working-directory: apps/android
           disable-animations: true
-          script: ./gradlew connectedDebugAndroidTest
+          script: |
+            ./gradlew connectedDebugAndroidTest
+            mkdir -p app/build/reports/screenshots
+            adb exec-out run-as dev.lyvt.melodify.android cat files/android-home.png > app/build/reports/screenshots/android-home.png
+            adb exec-out run-as dev.lyvt.melodify.android cat files/android-settings.png > app/build/reports/screenshots/android-settings.png
       - name: Prepare clearly labelled packages
         run: |
           mkdir -p preview

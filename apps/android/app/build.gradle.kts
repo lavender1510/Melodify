@@ -4,6 +4,7 @@ plugins {
     id("com.google.devtools.ksp")
     id("androidx.room")
 }
+
 android {
     namespace = "dev.lyvt.melodify"
     compileSdk = 37
@@ -15,8 +16,14 @@ android {
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
-    buildFeatures { compose = true; buildConfig = true }
-    compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -27,7 +34,9 @@ android {
     }
     testOptions { unitTests.isIncludeAndroidResources = true }
 }
+
 room { schemaDirectory("$projectDir/schemas") }
+
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2026.09.00"))
     implementation("androidx.activity:activity-compose:1.13.0")

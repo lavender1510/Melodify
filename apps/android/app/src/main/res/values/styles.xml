@@ -1,11 +1,10 @@
 <resources>
-    <style name="Theme.Melodify" parent="android:style/Theme.Material.NoActionBar">
+    <style name="Theme.Melodify.Base" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowActionModeOverlay">true</item>
         <item name="android:colorAccent">#B99BFF</item>
         <item name="android:windowBackground">#0B0D12</item>
-        <item name="android:windowSplashScreenBackground">#0B0D12</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/melodify_logo</item>
     </style>
+    <style name="Theme.Melodify" parent="@style/Theme.Melodify.Base" />
 </resources>
