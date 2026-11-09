@@ -60,6 +60,7 @@ jobs:
             adb exec-out run-as dev.lyvt.melodify.android cat files/android-home.png > app/build/reports/screenshots/android-home.png
             adb exec-out run-as dev.lyvt.melodify.android cat files/android-settings.png > app/build/reports/screenshots/android-settings.png
             adb exec-out run-as dev.lyvt.melodify.android cat files/android-playlists.png > app/build/reports/screenshots/android-playlists.png
+            adb exec-out run-as dev.lyvt.melodify.android cat files/android-mini-player.png > app/build/reports/screenshots/android-mini-player.png
             python3 -c "from pathlib import Path; assert all(p.read_bytes().startswith(bytes([137,80,78,71,13,10,26,10])) for p in Path('app/build/reports/screenshots').glob('*.png'))"
       - name: Build unsigned optimized release APK and AAB
         run: ./gradlew assembleRelease bundleRelease

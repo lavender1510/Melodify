@@ -113,6 +113,7 @@ class PlaybackIntegrationTest {
                 p.play()
             }
             await { p.isPlaying && p.currentPosition > 100 }
+            captureAppScreenshot(context, "android-mini-player.png")
             scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
             val before = read { p.currentPosition }
             Thread.sleep(500)
