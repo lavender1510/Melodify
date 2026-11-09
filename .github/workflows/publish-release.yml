@@ -1,0 +1,114 @@
+name: Publish verified release (manual only)
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing draft release tag
+        required: true
+        type: string
+      run_id:
+        description: Successful Windows verification run containing the packages
+        required: true
+        type: string
+      tested_sha:
+        description: Exact commit verified by the Windows run
+        required: true
+        type: string
+      target_sha:
+        description: Exact release target commit with the same tree as tested_sha
+        required: true
+        type: string
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: manual-release-${{ inputs.tag }}
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.tag }}
+      VERIFIED_RUN: ${{ inputs.run_id }}
+      TESTED_SHA: ${{ inputs.tested_sha }}
+      TARGET_SHA: ${{ inputs.target_sha }}
+    steps:
+      - name: Verify successful source run, identical release tree and draft
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, re, subprocess
+          def api(endpoint):
+              return json.loads(subprocess.check_output(['gh', 'api', endpoint], text=True))
+          repo=os.environ['GH_REPO']; tag=os.environ['RELEASE_TAG']; run_id=os.environ['VERIFIED_RUN']
+          tested=os.environ['TESTED_SHA']; target=os.environ['TARGET_SHA']
+          assert re.fullmatch(r'v\d+\.\d+\.\d+', tag), 'Invalid release tag'
+          assert run_id.isdigit(), 'Invalid run ID'
+          assert all(re.fullmatch(r'[a-f0-9]{40}', value) for value in [tested,target]), 'Invalid commit SHA'
+          run=api(f'repos/{repo}/actions/runs/{run_id}')
+          assert run['conclusion']=='success' and run['status']=='completed', 'Verification not successful'
+          assert run['head_sha']==tested, 'Verification belongs to another commit'
+          assert run['path']=='.github/workflows/windows-release.yml', 'Unexpected verification workflow'
+          a=api(f'repos/{repo}/git/commits/{tested}'); b=api(f'repos/{repo}/git/commits/{target}')
+          assert a['tree']['sha']==b['tree']['sha'], 'Release source differs from tested source'
+          release=api(f'repos/{repo}/releases/tags/{tag}')
+          assert release['draft'] and release['target_commitish']==target, 'Expected matching draft release'
+          print(f'Verified {tag}: run {run_id}, target {target}')
+          PY
+      - name: Download tested Windows setup
+        uses: actions/download-artifact@v4
+        with:
+          name: Melodify-Windows-Setup
+          path: artifacts
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Download tested portable package
+        uses: actions/download-artifact@v4
+        with:
+          name: Melodify-Windows
+          path: artifacts
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Check packages and create SHA-256 checksums
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, os, pathlib, zipfile
+          root=pathlib.Path('artifacts'); version=os.environ['RELEASE_TAG'][1:]
+          names=[f'Melodify-{version}-x64.exe',f'Melodify-{version}-portable.zip']
+          assert sorted(p.name for p in root.iterdir())==sorted(names), 'Unexpected package files'
+          with (root/names[0]).open('rb') as f: assert f.read(2)==b'MZ', 'Invalid setup executable'
+          with zipfile.ZipFile(root/names[1]) as z:
+              assert z.testzip() is None, 'Damaged portable ZIP'
+              assert 'resources/app.asar' in z.namelist(), 'App package missing'
+              with z.open('Melodify.exe') as f: assert f.read(2)==b'MZ', 'Invalid portable executable'
+          sums={}
+          for name in names:
+              with (root/name).open('rb') as f: sums[name]=hashlib.file_digest(f,'sha256').hexdigest()
+          (root/'SHA256SUMS.txt').write_text(''.join(f'{sums[name]}  {name}\n' for name in names))
+          print((root/'SHA256SUMS.txt').read_text())
+          PY
+      - name: Upload packages to the existing draft
+        shell: bash
+        run: gh release upload "$RELEASE_TAG" artifacts/*
+      - name: Verify uploaded asset digests and publish
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          tag=os.environ['RELEASE_TAG']; repo=os.environ['GH_REPO']; target=os.environ['TARGET_SHA']
+          release=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/releases/tags/{tag}'],text=True))
+          assert release['draft'] and release['target_commitish']==target, 'Draft changed before publication'
+          assets={a['name']:a for a in release['assets']}
+          files=list(pathlib.Path('artifacts').iterdir())
+          assert set(assets)=={p.name for p in files}, 'Release assets do not match verified packages'
+          for file in files:
+              asset=assets[file.name]
+              with file.open('rb') as f: digest=hashlib.file_digest(f,'sha256').hexdigest()
+              assert asset['state']=='uploaded' and asset['size']==file.stat().st_size, 'Incomplete asset'
+              assert asset['digest']=='sha256:'+digest, 'Uploaded digest mismatch'
+          subprocess.run(['gh','release','edit',tag,'--draft=false'],check=True)
+          print('Published '+release['html_url'])
+          PY
