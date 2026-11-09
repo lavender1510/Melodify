@@ -8,7 +8,7 @@ Stand 09.11.2026, Linux-Cloud-Umgebung. Windows-CI wird pro Commit ausgewiesen; 
 - `npm run build`: TypeScript und produktiver Vite-Build erfolgreich.
 - Originaler Electron-Audio-Smoke: echte WAV-Wiedergabe mit positiver Dauer, readyState 4 und fortschreitender Position erfolgreich.
 - Electron 45.2.3 / Chromium 156.0.8078.80 auf Linux: synthetische 440-Hz-Fixtures für MP3, FLAC, PCM-WAV, OGG/Vorbis, Opus, AAC/ADTS und AAC/M4A jeweils geladen, gespielt, pausiert, gesucht und fortgesetzt. In allen sieben Fällen Signal im Web-Audio-Analyser. Beschädigte und fehlende MP3-Fixtures: erwarteter MediaError 4 statt erfolgreicher Wiedergabe. Dies gilt für diese Fixtures und diesen Build, nicht pauschal für alle Dateien oder Windows.
-- Desktop-Smoke unter Xvfb (einschließlich korrupter Primärdatei, Backup-Recovery und anschließendem Sitzungscheckpoint): Preload bei aktivierter BrowserWindow-Sandbox, kein Renderer-Node, Playlist erstellen/umbenennen, ungültigen IPC-Patch abweisen, sauber schließen und Sitzung nach zwei Neustarts pausiert erhalten.
+- Desktop-Smoke unter Xvfb (einschließlich korrupter Primärdatei beim Start und im laufenden Betrieb, Backup-Recovery und anschließendem Sitzungscheckpoint): Preload bei aktivierter BrowserWindow-Sandbox, kein Renderer-Node, Playlist erstellen/umbenennen, ungültigen IPC-Patch abweisen, sauber schließen und Sitzung nach zwei Neustarts pausiert erhalten.
 - Such-/Sortiermessung mit 1.000 / 10.000 / 50.000 synthetischen Metadaten: ungefähr 12 / 23 / 113 ms in einem Lauf. Heap des jeweiligen Testworkers ungefähr 13 / 20 / 51 MiB. Keine Aussage über gesamten App-Speicher, reale Scanrate oder Windows-Leistung.
 - `npm audit --omit=dev --audit-level=high`: 0 gemeldete Schwachstellen zum Prüfzeitpunkt.
 

@@ -40,6 +40,10 @@ const fs=require('node:fs/promises');const os=require('node:os');const path=requ
   let saved=await page.evaluate(()=>window.melodify.load());assert.equal(saved.playlists[0].name,'Umbenannt');
   const invalid=await page.evaluate(()=>window.melodify.save({settings:{volume:9}}).then(()=>false,()=>true));assert.equal(invalid,true);
   const dataPath=await app.evaluate(({app})=>app.getPath('userData'));assert.equal(dataPath.startsWith(root),true);
+  const liveLibrary=path.join(dataPath,'library.json');await fs.copyFile(liveLibrary,liveLibrary+'.backup');await fs.writeFile(liveLibrary,'{broken-live');
+  await page.getByTitle('Favorit',{exact:true}).click();await page.getByRole('button',{name:'Lokales Backup wiederherstellen'}).waitFor();
+  await page.getByRole('button',{name:'Lokales Backup wiederherstellen'}).click();await page.getByRole('button',{name:'Lokales Backup wiederherstellen'}).waitFor({state:'detached'});
+  assert.equal(await page.getByTitle('Pause',{exact:true}).count(),0);
   await app.close();app=null;
   // Seed a previous session in the isolated profile, as a former app run would.
   const stored=JSON.parse(await fs.readFile(path.join(dataPath,'library.json'),'utf8'));
