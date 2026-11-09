@@ -35,10 +35,32 @@ class NativeUiTest {
     }
 
     private fun capture(name: String) {
-        val bitmap =
-            androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
-                .uiAutomation
-                .takeScreenshot() ?: return
+        val automation =
+            androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+        // The API 35 emulator may show a Quickstep ANR while booting. Close only that
+        // launcher dialog; an application ANR or any other overlay must fail the test.
+        val root = automation.rootInActiveWindow
+        if (
+            root?.findAccessibilityNodeInfosByText("Quickstep isn't responding")?.isNotEmpty() ==
+                true
+        ) {
+            val close = root.findAccessibilityNodeInfosByText("Close app").firstOrNull()
+            check(
+                close?.performAction(
+                    android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK
+                ) == true
+            )
+        }
+        compose.waitUntil(10000) {
+            automation.rootInActiveWindow?.packageName?.toString() == compose.activity.packageName
+        }
+        compose.waitForIdle()
+        check(
+            automation.rootInActiveWindow?.packageName?.toString() == compose.activity.packageName
+        ) {
+            "A system window obscures Melodify; this screenshot is not valid UI evidence"
+        }
+        val bitmap = requireNotNull(automation.takeScreenshot())
         java.io.File(compose.activity.filesDir, name).outputStream().use {
             bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
         }
