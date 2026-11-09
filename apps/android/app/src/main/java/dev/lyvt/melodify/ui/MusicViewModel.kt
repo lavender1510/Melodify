@@ -63,9 +63,9 @@ class MusicViewModel(application: Application): AndroidViewModel(application) {
     fun createPlaylist(name: String) = launch { dao.savePlaylist(Playlist(UUID.randomUUID().toString(),name.trim().take(100))) }
     fun savePlaylist(playlist: Playlist)=launch { dao.savePlaylist(playlist) }
     fun deletePlaylist(playlist: Playlist)=launch { dao.deletePlaylist(playlist) }
-    fun addToPlaylist(track: Track,playlist: Playlist)=launch { val old=dao.playlistEntries(playlist.id);dao.replaceEntries(playlist.id,old+PlaylistEntry(playlist.id,UUID.randomUUID().toString(),track.id,old.size)) }
-    fun removeEntry(playlist: Playlist,index: Int)=launch { dao.replaceEntries(playlist.id,dao.playlistEntries(playlist.id).filterIndexed { i,_ -> i!=index }) }
-    fun moveEntry(playlist: Playlist,from: Int,to: Int)=launch { dao.replaceEntries(playlist.id,moved(dao.playlistEntries(playlist.id),from,to)) }
+    fun addToPlaylist(track: Track,playlist: Playlist)=launch { app.database.withTransactionCompat { val old=dao.playlistEntries(playlist.id);dao.replaceEntries(playlist.id,old+PlaylistEntry(playlist.id,UUID.randomUUID().toString(),track.id,old.size)) } }
+    fun removeEntry(playlist: Playlist,index: Int)=launch { app.database.withTransactionCompat { dao.replaceEntries(playlist.id,dao.playlistEntries(playlist.id).filterIndexed { i,_ -> i!=index }) } }
+    fun moveEntry(playlist: Playlist,from: Int,to: Int)=launch { app.database.withTransactionCompat { dao.replaceEntries(playlist.id,moved(dao.playlistEntries(playlist.id),from,to)) } }
     fun duplicate(playlist: Playlist)=launch { val copy=playlist.copy(id=UUID.randomUUID().toString(),name=playlist.name+" (Kopie)",createdAt=System.currentTimeMillis());app.database.withTransactionCompat { dao.savePlaylist(copy);dao.replaceEntries(copy.id,dao.playlistEntries(playlist.id).map { it.copy(playlistId=copy.id) }) } }
     fun updateSettings(value: UserSettings)=launch { app.preferences.update(value) }
     fun addTree(uri: Uri)=launch { app.library.addTree(uri) }

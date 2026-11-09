@@ -22,7 +22,7 @@ class NativeUiTest {
         compose.onNodeWithContentDescription("Weitere Bereiche").performClick()
         compose.onNodeWithText("Einstellungen").performClick()
         compose.onNodeWithText("122 Themes entdecken").performClick()
-        compose.onNodeWithText("Nocturne").performClick()
+        compose.onAllNodesWithText("Nocturne").onLast().performClick()
         compose.onNodeWithText("Anwenden").performClick()
         compose.onNodeWithText("Dein Sound. Deine Regeln.").assertExists()
     }

@@ -5,6 +5,7 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
@@ -68,6 +69,7 @@ fun time(ms: Long): String { val s=ms.coerceAtLeast(0)/1000;return "${s/60}:${(s
     val importLauncher=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { it?.let(vm::importPlaylist) }
     val exportLauncher=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("audio/x-mpegurl")) { uri->exportTarget?.let { p->if(uri!=null)vm.exportPlaylist(uri,p) } }
     val imageLauncher=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri->if(uri!=null)vm.launch { context.contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);val target=coverTarget;if(target!=null)vm.savePlaylist(target.copy(coverUri=uri.toString())) else vm.updateSettings(settings.copy(background=uri.toString())) } }
+    BackHandler(enabled=group!=null||page!="Startseite") { if(group!=null){group=null;playlistId=null} else if(vm.query.value.isNotEmpty())vm.query.value="" else page="Startseite" }
     val snack=remember { SnackbarHostState() }
     LaunchedEffect(message,audioError,scan.error) { (message?:audioError?:scan.error)?.let { snack.showSnackbar(it);vm.message.value=null;vm.app.playbackError.value=null } }
     LaunchedEffect(Unit) { if(permission && tracks.isEmpty())vm.app.library.scan() }
@@ -207,6 +209,6 @@ private fun androidx.compose.foundation.lazy.LazyListScope.homeSection(title: St
     SongRow(t,{vm.play(tracks,i)},{vm.favorite(t)},{onMenu(t)})
     if(playlist!=null)Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End) { TextButton(onClick={onMove?.invoke(i,i-1)},enabled=i>0){Text("↑")};TextButton(onClick={onMove?.invoke(i,i+1)},enabled=i<tracks.lastIndex){Text("↓")};TextButton(onClick={onRemove?.invoke(i)}){Text("Entfernen")} }
 } } } }
-@Composable private fun SongRow(t: Track,play: ()->Unit,favorite: ()->Unit,menu: (()->Unit)?) { ListItem(modifier=Modifier.clickable(onClick=play),headlineContent={Text(t.title,maxLines=1,overflow=TextOverflow.Ellipsis)},supportingContent={Text(if(t.missing)"Datei fehlt · Metadaten erhalten" else "${t.artist} · ${time(t.duration)}",maxLines=1,overflow=TextOverflow.Ellipsis)},leadingContent={Cover(t)},trailingContent={Row { IconButton(onClick=favorite){Icon(if(t.favorite)Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,if(t.favorite)"Favorit entfernen" else "Favorisieren")};if(menu!=null)IconButton(onClick=menu){Icon(Icons.Rounded.MoreVert,"Titeloptionen")} }}) }
+@Composable private fun SongRow(t: Track,play: ()->Unit,favorite: ()->Unit,menu: (()->Unit)?) { ListItem(modifier=Modifier.clickable(onClick=play),headlineContent={Text(t.title,maxLines=1,overflow=TextOverflow.Ellipsis)},supportingContent={Text(if(t.missing)"Datei fehlt · Metadaten erhalten" else if(t.metadataError!=null)"Metadaten nicht lesbar · ${t.artist}" else "${t.artist} · ${time(t.duration)}",maxLines=1,overflow=TextOverflow.Ellipsis)},leadingContent={Cover(t)},trailingContent={Row { IconButton(onClick=favorite){Icon(if(t.favorite)Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,if(t.favorite)"Favorit entfernen" else "Favorisieren")};if(menu!=null)IconButton(onClick=menu){Icon(Icons.Rounded.MoreVert,"Titeloptionen")} }}) }
 private fun Color.luminanceCompat()=this.luminance()
 private fun android.graphics.Bitmap.asImageBitmapCompat()=this.asImageBitmap()

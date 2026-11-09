@@ -26,7 +26,8 @@ data class Track(
     val heardMs: Long = 0,
     val lastPlayed: Long = 0,
     val searchText: String = searchKey("$title $artist $album $genre $format"),
-    val fileName: String = uri.substringAfterLast('/')
+    val fileName: String = uri.substringAfterLast('/'),
+    val metadataError: String? = null
 )
 @Entity(tableName = "playlists")
 data class Playlist(@PrimaryKey val id: String, val name: String, val createdAt: Long = System.currentTimeMillis(), val favorite: Boolean = false, val coverUri: String? = null)

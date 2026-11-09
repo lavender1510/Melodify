@@ -49,7 +49,7 @@ class LibraryRepository(private val context: Context, private val db: MusicDatab
     private suspend fun scanSource(source: String, old: Map<String,Track>, read: suspend ()->List<Track>) {
         val found=withTimeout(120_000) { read() };currentCoroutineContext().ensureActive()
         val ids=found.map { it.id }.toSet()
-        val merged=found.map { track -> old[track.id]?.let { track.copy(addedAt=it.addedAt,favorite=it.favorite,playCount=it.playCount,heardMs=it.heardMs,lastPlayed=it.lastPlayed) }?:track }
+        val merged=found.map { track -> old[track.id]?.let { if(track.metadataError!=null)it.copy(missing=false,metadataError=track.metadataError,size=track.size) else track.copy(addedAt=it.addedAt,favorite=it.favorite,playCount=it.playCount,heardMs=it.heardMs,lastPlayed=it.lastPlayed) }?:track }
         // Commit only a complete source. Never remove metadata or playlist references.
         db.withTransaction { dao.upsertTracks(merged+old.values.filter { it.source==source && it.id !in ids }.map { it.copy(missing=true) }) }
     }
@@ -123,6 +123,6 @@ class LibraryRepository(private val context: Context, private val db: MusicDatab
                 val genre=read(MediaMetadataRetriever.METADATA_KEY_GENRE)
                 base.copy(title=title,artist=artist,album=album,genre=genre,year=read(MediaMetadataRetriever.METADATA_KEY_YEAR).toIntOrNull()?:0,duration=read(MediaMetadataRetriever.METADATA_KEY_DURATION).toLongOrNull()?:0,searchText=searchKey("$title $artist $album $genre ${base.format}"))
             }
-        } catch(_: Exception) { base } // ExoPlayer provides the definitive, visible decoder error.
+        } catch(e: Exception) { base.copy(metadataError=e.localizedMessage?:"Metadaten nicht lesbar") } // ExoPlayer provides the definitive, visible decoder error.
     }
 }

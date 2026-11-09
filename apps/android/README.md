@@ -41,7 +41,7 @@ Der separate Android-Actions-Workflow baut/testet und liefert Artefakte. Nach gr
 
 ## Berechtigungen und Daten
 
-Android 13+: READ_MEDIA_AUDIO, Android 10–12: READ_EXTERNAL_STORAGE, nur für die MediaStore-Bibliothek. SAF-Dateidialoge funktionieren unabhängig davon mit expliziter Ordnerfreigabe. FOREGROUND_SERVICE und FOREGROUND_SERVICE_MEDIA_PLAYBACK sind für Wiedergabe nötig; WAKE_LOCK schützt laufende Wiedergabe bei abgeschaltetem Display. Medienbenachrichtigungen einer MediaSession sind von der allgemeinen Android-13-Benachrichtigungsberechtigung ausgenommen. Kein MANAGE_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, RECORD_AUDIO, INTERNET oder Tracking.
+Android 13+: READ_MEDIA_AUDIO, Android 10–12: READ_EXTERNAL_STORAGE, nur für die MediaStore-Bibliothek. SAF-Dateidialoge funktionieren unabhängig davon mit expliziter Ordnerfreigabe. FOREGROUND_SERVICE und FOREGROUND_SERVICE_MEDIA_PLAYBACK sind für Wiedergabe nötig; WAKE_LOCK schützt laufende Wiedergabe bei abgeschaltetem Display. MODIFY_AUDIO_SETTINGS erlaubt den ausdrücklich angebotenen Geräte-Equalizer. Medienbenachrichtigungen einer MediaSession sind von der allgemeinen Android-13-Benachrichtigungsberechtigung ausgenommen. Kein MANAGE_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, RECORD_AUDIO, INTERNET oder Tracking.
 
 Musikdateien werden nicht verändert oder gelöscht. Lokale Daten liegen im privaten App-Verzeichnis: Room mit WAL/Transaktionen, DataStore mit atomaren Updates und importierte Lyrics. Die App verwendet keine Cloud-Backups. Entfernte Quellen behalten URI-Grants für erhaltene Tracks/Playlist-Verknüpfungen. Nach Android-Deinstallation gehen private App-Daten verloren; Originalmusik bleibt erhalten.
 
