@@ -1,6 +1,10 @@
-# Melodify Android v0.1.0 — Preview
+# Melodify Android v0.1.1 — Preview
 
 Native lokale Musik-App für Android 10+ (API 29). Kotlin, Jetpack Compose, Media3/ExoPlayer und MediaSessionService, Room, DataStore und Coroutines/Flow. Keine WebView und keine Internet-Berechtigung. Die Windows-App und ihre Versionsnummer bleiben unverändert.
+
+## Layout-Update v0.1.1
+
+Kompakte Kopfzeile mit einblendbarer Suche, horizontalen Kategorien, oben abgerundeter Bibliotheksfläche, großen Sammlungscovern und schwebendem Mini-Player mit Vor/Zurück und direktem Queue-Zugriff. Die bestehenden 122 Paletten und eigenen Farbwerte bleiben unverändert. Playlist-Namenssortierung ist in beide Richtungen möglich.
 
 ## Funktionsumfang
 

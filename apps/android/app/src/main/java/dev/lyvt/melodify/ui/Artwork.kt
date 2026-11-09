@@ -93,7 +93,7 @@ fun Cover(track: Track?, modifier: Modifier = Modifier, uri: String? = null) {
     Box(
         modifier
             .size(52.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(20.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
     ) {
         if (bitmap != null)
