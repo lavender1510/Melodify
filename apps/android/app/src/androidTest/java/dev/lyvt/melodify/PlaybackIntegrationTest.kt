@@ -131,6 +131,24 @@ class PlaybackIntegrationTest {
             assertEquals(Player.REPEAT_MODE_ALL, saved.repeat)
             assertFalse(read { p.isPlaying })
             scenario.close()
+            InstrumentationRegistry.getInstrumentation().runOnMainSync { p.release() }
+            controller = null
+            context.stopService(Intent(context, PlaybackService::class.java))
+            Thread.sleep(500)
+            val restoredFuture =
+                MediaController.Builder(
+                        context,
+                        SessionToken(context, ComponentName(context, PlaybackService::class.java)),
+                    )
+                    .buildAsync()
+            val restored = restoredFuture.get(15, TimeUnit.SECONDS)
+            controller = restored
+            await { restored.mediaItemCount == 2 }
+            assertFalse(read { restored.isPlaying })
+            assertEquals(saved.index, read { restored.currentMediaItemIndex })
+            assertEquals(saved.position, read { restored.currentPosition })
+            assertTrue(read { restored.shuffleModeEnabled })
+            assertEquals(saved.repeat, read { restored.repeatMode })
         } finally {
             controller?.let { p ->
                 InstrumentationRegistry.getInstrumentation().runOnMainSync {

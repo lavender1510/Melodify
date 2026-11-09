@@ -82,6 +82,12 @@ interface MusicDao {
 
     @Upsert suspend fun upsertTracks(tracks: List<Track>)
 
+    @Transaction
+    suspend fun mergeScan(source: String, found: List<Track>) {
+        // Read current favorites/statistics under the writer transaction, after the scan.
+        upsertTracks(mergeLibrary(source, found, allTracks()))
+    }
+
     @Query("UPDATE tracks SET favorite=NOT favorite WHERE id=:id")
     suspend fun toggleFavorite(id: String)
 
@@ -135,16 +141,46 @@ abstract class MusicDatabase : RoomDatabase() {
     abstract fun music(): MusicDao
 }
 
+private val marks = Regex("\\p{M}")
+private val whitespace = Regex("\\s+")
+
 fun searchKey(value: String): String =
     Normalizer.normalize(value, Normalizer.Form.NFKD)
-        .replace(Regex("\\p{M}"), "")
+        .replace(marks, "")
         .lowercase(Locale.GERMAN)
         .replace("ß", "ss")
         .trim()
 
 fun matchesSearch(track: Track, query: String): Boolean =
-    searchKey(query).split(Regex("\\s+")).all { it in track.searchText }
+    searchKey(query).split(whitespace).all { it in track.searchText }
+
+fun filterTracks(tracks: List<Track>, query: String): List<Track> {
+    val terms = searchKey(query).split(whitespace).filter { it.isNotEmpty() }
+    if (terms.isEmpty()) return tracks
+    return tracks.filter { track -> terms.all { it in track.searchText } }
+}
 
 fun <T> moved(items: List<T>, from: Int, to: Int): List<T> =
     if (from !in items.indices || to !in items.indices) items
     else items.toMutableList().apply { add(to, removeAt(from)) }
+
+fun mergeLibrary(source: String, found: List<Track>, current: List<Track>): List<Track> {
+    val byId = current.associateBy { it.id }
+    val seen = found.map { it.id }.toSet()
+    val merged = found.map { track ->
+        byId[track.id]?.let { old ->
+            if (track.metadataError != null)
+                old.copy(missing = false, metadataError = track.metadataError, size = track.size)
+            else
+                track.copy(
+                    addedAt = old.addedAt,
+                    favorite = old.favorite,
+                    playCount = old.playCount,
+                    heardMs = old.heardMs,
+                    lastPlayed = old.lastPlayed,
+                )
+        } ?: track
+    }
+    return merged +
+        current.filter { it.source == source && it.id !in seen }.map { it.copy(missing = true) }
+}

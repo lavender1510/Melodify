@@ -78,7 +78,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     @OptIn(FlowPreview::class)
     val results =
         combine(tracks, query.debounce(150), sort) { tracks, query, sort ->
-                val filtered = tracks.filter { matchesSearch(it, query) }
+                val filtered = filterTracks(tracks, query)
                 when (sort) {
                     "Künstler" -> filtered.sortedBy { it.artist.lowercase() }
                     "Album" -> filtered.sortedBy { it.album.lowercase() }

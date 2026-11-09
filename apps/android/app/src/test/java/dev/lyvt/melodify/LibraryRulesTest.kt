@@ -57,7 +57,39 @@ class LibraryRulesTest {
                 track(it.toString(), "Song $it", if (it % 10 == 0) "Björk" else "Andere")
             }
         val start = System.nanoTime()
-        assertEquals(5000, tracks.count { matchesSearch(it, "bjork mp3") })
+        assertEquals(5000, filterTracks(tracks, "bjork mp3").size)
         println("50000-entry search ms=" + (System.nanoTime() - start) / 1_000_000)
+    }
+
+    @Test
+    fun mergePreservesFavoritesAndStatisticsChangedWhileScanning() {
+        val current =
+            track("a")
+                .copy(
+                    source = "test",
+                    favorite = true,
+                    playCount = 9,
+                    heardMs = 42000,
+                    lastPlayed = 123,
+                )
+        val stale = track("a").copy(source = "test", title = "Neu gelesen")
+        val merged = mergeLibrary("test", listOf(stale), listOf(current)).single()
+        assertTrue(merged.favorite)
+        assertEquals(9, merged.playCount)
+        assertEquals(42000L, merged.heardMs)
+        assertEquals("Neu gelesen", merged.title)
+    }
+
+    @Test
+    fun metadataFailureAndMissingScanRetainKnownInformation() {
+        val current = track("a").copy(source = "test", favorite = true)
+        val damaged = current.copy(title = "fallback", metadataError = "Decode")
+        assertEquals(
+            current.title,
+            mergeLibrary("test", listOf(damaged), listOf(current)).single().title,
+        )
+        val missing = mergeLibrary("test", emptyList(), listOf(current)).single()
+        assertTrue(missing.missing)
+        assertTrue(missing.favorite)
     }
 }

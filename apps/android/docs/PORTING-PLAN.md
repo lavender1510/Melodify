@@ -27,7 +27,7 @@ Basis: main 88f1cb8, 09.11.2026. Windows bleibt v0.2.0; Android beginnt separat 
 
 ## Weitere Ausbauschritte
 
-Lokale synchronisierte LRC-Texte, robustes plattformübergreifendes Import-/Exportformat, eigene Dauer für Sleep-Timer, Widgets, breite Smartphone-/Tablet- und Hardware-Abnahme. Visualizer benötigt gesonderte Geräte-/Berechtigungsentscheidung; kein RECORD_AUDIO nur für eine optische Simulation. Balance/Crossfade werden ohne überprüfte DSP-Implementierung nicht angeboten. ExoPlayer kann geeignete Streams nahtlos abspielen; Gapless ist keine pauschal garantierte Eigenschaft aller Dateien/Geräte.
+Robustes plattformübergreifendes Import-/Exportformat, Widgets, Tages-/Monatsstatistik und breite Smartphone-/Tablet-/Hardware-Abnahme. Lokale LRC-Texte und eigene Sleep-Timer-Dauer sind bereits enthalten. Visualizer benötigt gesonderte Geräte-/Berechtigungsentscheidung; kein RECORD_AUDIO nur für eine optische Simulation. Balance/Crossfade werden ohne überprüfte DSP-Implementierung nicht angeboten. ExoPlayer kann geeignete Streams nahtlos abspielen; Gapless ist keine pauschal garantierte Eigenschaft aller Dateien/Geräte.
 
 ## Sicherheits- und Datenregeln
 

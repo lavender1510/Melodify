@@ -10,7 +10,6 @@ import android.os.*
 import android.provider.MediaStore
 import androidx.core.content.ContextCompat
 import androidx.documentfile.provider.DocumentFile
-import androidx.room.withTransaction
 import java.security.MessageDigest
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,13 +53,12 @@ class LibraryRepository(
             status.value = ScanState(true)
             try {
                 withContext(Dispatchers.IO) {
-                    val old = dao.allTracks().associateBy { it.id }
                     val sources = dao.allSources().filter { it.enabled }
-                    if (hasPermission()) scanSource("mediastore", old) { readMediaStore() }
+                    if (hasPermission()) scanSource("mediastore") { readMediaStore() }
                     for (source in sources) {
                         ensureActive()
                         try {
-                            scanSource(source.uri, old) { readTree(source.uri) }
+                            scanSource(source.uri) { readTree(source.uri) }
                             dao.saveSource(
                                 source.copy(scannedAt = System.currentTimeMillis(), error = null)
                             )
@@ -90,37 +88,10 @@ class LibraryRepository(
         }
     }
 
-    private suspend fun scanSource(
-        source: String,
-        old: Map<String, Track>,
-        read: suspend () -> List<Track>,
-    ) {
+    private suspend fun scanSource(source: String, read: suspend () -> List<Track>) {
         val found = withTimeout(120_000) { read() }
         currentCoroutineContext().ensureActive()
-        val ids = found.map { it.id }.toSet()
-        val merged = found.map { track ->
-            old[track.id]?.let {
-                if (track.metadataError != null)
-                    it.copy(missing = false, metadataError = track.metadataError, size = track.size)
-                else
-                    track.copy(
-                        addedAt = it.addedAt,
-                        favorite = it.favorite,
-                        playCount = it.playCount,
-                        heardMs = it.heardMs,
-                        lastPlayed = it.lastPlayed,
-                    )
-            } ?: track
-        }
-        // Commit only a complete source. Never remove metadata or playlist references.
-        db.withTransaction {
-            dao.upsertTracks(
-                merged +
-                    old.values
-                        .filter { it.source == source && it.id !in ids }
-                        .map { it.copy(missing = true) }
-            )
-        }
+        dao.mergeScan(source, found)
     }
 
     fun cancel() {
