@@ -1,5 +1,5 @@
 <resources>
-    <style name="Theme.Melodify" parent="@style/Theme.Melodify.Base">
+    <style name="Theme.Melodify" parent="@style/BaseThemeMelodify">
         <item name="android:windowSplashScreenBackground">#0B0D12</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/melodify_logo</item>
     </style>

@@ -63,3 +63,7 @@ Context Isolation, Renderer-Sandbox, kein Node im Renderer, kleine Preload-Bridg
 Leertaste: Play/Pause außerhalb von Eingabefeldern. Escape: Dialoge, Queue und erweiterte Wiedergabe schließen. Enter: fokussierten Titel abspielen. Playlist-Reihenfolge alternativ im Titelmenü mit „nach oben/unten“ ändern.
 
 MIT. Herkunft der zusätzlichen Paletten: [THIRD_PARTY_THEMES.md](THIRD_PARTY_THEMES.md).
+
+## Android
+
+Die native Android-App wird separat unter [`apps/android`](apps/android/README.md) entwickelt (Android v0.1.0 Preview, Android 10+). Kotlin/Compose, Media3-Hintergrundwiedergabe und lokale Room-/DataStore-Daten; keine WebView oder Cloud-Pflicht. Android- und Windows-Builds sind unabhängig. Installations-, Berechtigungs- und Testhinweise stehen im Android-README. Test-APK und unsigned Release-Artefakte sind ausdrücklich keine produktionssignierte Veröffentlichung.

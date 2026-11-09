@@ -33,10 +33,12 @@ jobs:
         with:
           packages: platform-tools
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
       - name: Install compile SDK
         run: sdkmanager 'platforms;android-37.0' 'build-tools;36.0.0'
-      - name: Unit tests, lint and APK/AAB builds
-        run: ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease bundleRelease
+      - name: Unit tests, lint and installable debug APK
+        run: ./gradlew testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
       - name: Enable KVM for Android emulator
         working-directory: .
         run: |
@@ -57,6 +59,8 @@ jobs:
             mkdir -p app/build/reports/screenshots
             adb exec-out run-as dev.lyvt.melodify.android cat files/android-home.png > app/build/reports/screenshots/android-home.png
             adb exec-out run-as dev.lyvt.melodify.android cat files/android-settings.png > app/build/reports/screenshots/android-settings.png
+      - name: Build unsigned optimized release APK and AAB
+        run: ./gradlew assembleRelease bundleRelease
       - name: Prepare clearly labelled packages
         run: |
           mkdir -p preview
