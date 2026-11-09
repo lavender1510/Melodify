@@ -157,7 +157,10 @@ function createWindow() {
 }
 app.whenReady().then(async()=> {
   if (process.platform==='win32') app.setAppUserModelId('dev.lyvt.melodify');
-  await restore(); watcher=new FolderWatcher(folder=>scan(folder),(folder,error)=>notifyProgress({stage:'error',message:`Ordnerüberwachung ${folder}: ${error.message}`}));if(!store.blocked)watcher.configure(state.watchFolders||[]); protocol.handle('melodify-media',mediaHandler);createWindow();createTray();
+  await restore(); watcher=new FolderWatcher(folder=>scan(folder),(folder,error)=>{
+    if(folder){state={...state,watchFolders:(state.watchFolders||[]).filter(f=>f!==folder),folderStatus:{...state.folderStatus,[folder]:{status:'error',scannedAt:Date.now(),errors:[error.message]}}};void saveState().catch(()=>notifyProgress({stage:'error',message:'Der Überwachungsfehler konnte nicht gespeichert werden.'}));}
+    notifyProgress({stage:'error',message:`Ordnerüberwachung ${folder}: ${error.message}`});
+  });if(!store.blocked)watcher.configure(state.watchFolders||[]); protocol.handle('melodify-media',mediaHandler);createWindow();createTray();
   handle('media:diagnose', async (_event, id) => {
     if (typeof id !== 'string' || !/^[a-f0-9]{24}$/.test(id)) return {ok:false,reason:'Ungültige Titel-ID.'};
     const file = mediaFiles.get(id);

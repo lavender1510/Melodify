@@ -31,3 +31,11 @@ test('invalid or missing backup never overwrites a damaged primary',async t=>{
 test('write error rejects but queue can recover',async t=>{
  const {file,store}=await fixture(t);await fs.mkdir(file+'.tmp');await assert.rejects(store.save(defaults()));await fs.rmdir(file+'.tmp');await store.save(defaults());assert.equal(JSON.parse(await fs.readFile(file)).themeId,'nocturne');
 });
+
+test('missing primary with an existing backup requires explicit recovery',async t=>{
+ const {file,store}=await fixture(t);await store.save({...defaults(),favorites:['keep']});await store.save({...defaults(),favorites:['keep','second']});await fs.unlink(file);
+ const reopened=new StateStore(file,defaults);await reopened.load();assert.equal(reopened.blocked,true);await assert.rejects(reopened.save(defaults()));assert.deepEqual((await reopened.recover()).favorites,['keep']);
+});
+test('a surviving temporary file in an incomplete first save is preserved',async t=>{
+ const {file,store}=await fixture(t);const bytes=JSON.stringify({...defaults(),favorites:['unsaved']});await fs.writeFile(file+'.tmp',bytes);await store.load();assert.equal(store.blocked,true);await assert.rejects(store.save(defaults()));assert.equal(await fs.readFile(file+'.tmp','utf8'),bytes);
+});

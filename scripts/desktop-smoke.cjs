@@ -24,10 +24,16 @@ const fs=require('node:fs/promises');const os=require('node:os');const path=requ
   await page.waitForFunction(()=>Number(document.querySelector('input[aria-label="Wiedergabeposition"]').value)>0);
   for(let i=0;i<10;i++)await page.getByTitle('Nächster Titel',{exact:true}).click();
   await page.waitForSelector('.playerbar button[title="Pause"]');assert.equal(await page.locator('.audio-error').count(),0);
+  await page.evaluate(directory=>window.melodify.watchFolder(directory,true),music);
+  await fs.writeFile(path.join(music,'C.wav'),require('./wav-fixture.cjs')());await page.waitForFunction(async()=>(await window.melodify.load()).tracks.length===3);
+  assert.equal(await page.getByTitle('Pause',{exact:true}).count(),1);
+  await page.evaluate(directory=>window.melodify.watchFolder(directory,false),music);
   await page.getByTitle('Pause',{exact:true}).click();
   const scanned=await page.evaluate(()=>window.melodify.load());assert.equal(scanned.tracks.every(t=>t.duration>3.9),true);
   await fs.unlink(path.join(music,'B.wav'));await page.evaluate(()=>window.melodify.rescan());
-  const rescanned=await page.evaluate(()=>window.melodify.load());assert.equal(rescanned.tracks.length,2);assert.equal(rescanned.tracks.find(t=>t.title==='B').missing,true);
+  const cancelled=await page.evaluate(async()=>{const scan=window.melodify.rescan();await window.melodify.cancelScan();return scan;});assert.equal(cancelled.cancelled,true);
+  const rescanned=await page.evaluate(()=>window.melodify.load());assert.equal(rescanned.tracks.length,3);assert.equal(rescanned.tracks.find(t=>t.title==='B').missing,true);
+  await page.evaluate(directory=>window.melodify.removeFolder(directory),music);assert.equal((await fs.stat(path.join(music,'A.wav'))).isFile(),true);assert.equal((await page.evaluate(()=>window.melodify.load())).tracks.length,3);
   // Native Chromium prompt was replaced with the app's own form.
   await page.getByRole('button',{name:'Playlists',exact:true}).click();await page.getByRole('button',{name:'Playlist erstellen',exact:true}).first().click();await page.getByRole('textbox',{name:'Playlistname'}).fill('Smoke Playlist');await page.getByRole('button',{name:'Erstellen',exact:true}).click();
   await page.getByRole('button',{name:'Umbenennen',exact:true}).click();await page.getByRole('textbox',{name:'Playlistname'}).fill('Umbenannt');await page.getByRole('button',{name:'Speichern',exact:true}).click();

@@ -4,7 +4,7 @@ Stand 09.11.2026, Linux-Cloud-Umgebung. Windows-CI wird pro Commit ausgewiesen; 
 
 ## Ausgeführt
 
-- `npm test`: 23 Vitest-Fälle und 16 Node-Fälle erfolgreich. Bestehende Suche-/Theme-/Range-Regressionen bleiben enthalten.
+- `npm test`: 23 Vitest-Fälle und 18 Node-Fälle erfolgreich. Bestehende Suche-/Theme-/Range-Regressionen bleiben enthalten.
 - `npm run build`: TypeScript und produktiver Vite-Build erfolgreich.
 - Originaler Electron-Audio-Smoke: echte WAV-Wiedergabe mit positiver Dauer, readyState 4 und fortschreitender Position erfolgreich.
 - Electron 45.2.3 / Chromium 156.0.8078.80 auf Linux: synthetische 440-Hz-Fixtures für MP3, FLAC, PCM-WAV, OGG/Vorbis, Opus, AAC/ADTS und AAC/M4A jeweils geladen, gespielt, pausiert, gesucht und fortgesetzt. In allen sieben Fällen Signal im Web-Audio-Analyser. Beschädigte und fehlende MP3-Fixtures: erwarteter MediaError 4 statt erfolgreicher Wiedergabe. Dies gilt für diese Fixtures und diesen Build, nicht pauschal für alle Dateien oder Windows.
@@ -14,7 +14,7 @@ Stand 09.11.2026, Linux-Cloud-Umgebung. Windows-CI wird pro Commit ausgewiesen; 
 
 ## Gezielte Regressionsfälle
 
-100 parallele Speicher-Snapshots; JSON-Fehler; fehlendes/ungültiges Backup; Originalerhalt bei Recovery; ungültige/future Schemawerte; Schreibfehler und anschließende Erholung; fehlende/erneut gefundene Tracks; Teilscans und Lesefehler; Symlinkschleifen; Scanabbruch; verspätete Diagnose; 100 schnelle Songaufträge; Ladezeitlimit; Decoder-/Play-Fehler; pausierter Restore; Shuffle ohne Wiederholung, Zurück/Vorwärts und entfernte Queue-IDs; Playlist-Reihenfolge/Duplikate; Windows-Pfade, Unicode, BOM und M3U8-Roundtrip.
+100 parallele Speicher-Snapshots; JSON-Fehler; fehlendes/ungültiges Backup; Originalerhalt bei Recovery; ungültige/future Schemawerte; Schreibfehler und anschließende Erholung; fehlende/erneut gefundene Tracks; Teilscans und Lesefehler; Symlinkschleifen; Scanabbruch; Überwachung während Wiedergabe; Ordnerentfernung ohne Dateilöschung; fehlender Primärbestand mit erhaltenem Backup/Temp; verspätete Diagnose; 100 schnelle Songaufträge; Ladezeitlimit; Decoder-/Play-Fehler; pausierter Restore; Shuffle ohne Wiederholung, Zurück/Vorwärts und entfernte Queue-IDs; Playlist-Reihenfolge/Duplikate; Windows-Pfade, Unicode, BOM und M3U8-Roundtrip.
 
 ## Offen / separat zu bestätigen
 

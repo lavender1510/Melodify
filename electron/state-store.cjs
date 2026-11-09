@@ -26,7 +26,14 @@ class StateStore {
   async load() {
     try { return await this.read(this.file); }
     catch(error) {
-      if (error.code==='ENOENT') return validate(this.defaults(),this.defaults);
+      if (error.code==='ENOENT') {
+        // A missing primary with surviving recovery data is not a fresh profile.
+        let recoveryData=false;
+        for(const suffix of ['.backup','.tmp','.recovery.tmp']){
+          try{await fs.stat(this.file+suffix);recoveryData=true;}catch(e){if(e.code!=='ENOENT')recoveryData=true;}
+        }
+        if(!recoveryData)return validate(this.defaults(),this.defaults);
+      }
       this.blocked=true; this.status='Die Bibliothek ist beschädigt oder nicht lesbar. Speichern ist gesperrt. Originaldaten bleiben erhalten. Bitte Backup wiederherstellen.';
       return validate(this.defaults(),this.defaults);
     }
