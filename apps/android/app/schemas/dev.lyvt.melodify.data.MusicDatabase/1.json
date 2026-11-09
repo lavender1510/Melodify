@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "c368cc7dbdea6a261ae540b1b3632c35",
+    "identityHash": "b3e64de63aca0972f86f1d0d78f44790",
     "entities": [
       {
         "tableName": "tracks",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `uri` TEXT NOT NULL, `source` TEXT NOT NULL, `title` TEXT NOT NULL, `artist` TEXT NOT NULL, `album` TEXT NOT NULL, `genre` TEXT NOT NULL, `year` INTEGER NOT NULL, `duration` INTEGER NOT NULL, `size` INTEGER NOT NULL, `format` TEXT NOT NULL, `addedAt` INTEGER NOT NULL, `coverUri` TEXT, `missing` INTEGER NOT NULL, `favorite` INTEGER NOT NULL, `playCount` INTEGER NOT NULL, `heardMs` INTEGER NOT NULL, `lastPlayed` INTEGER NOT NULL, `searchText` TEXT NOT NULL, `fileName` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `uri` TEXT NOT NULL, `source` TEXT NOT NULL, `title` TEXT NOT NULL, `artist` TEXT NOT NULL, `album` TEXT NOT NULL, `genre` TEXT NOT NULL, `year` INTEGER NOT NULL, `duration` INTEGER NOT NULL, `size` INTEGER NOT NULL, `format` TEXT NOT NULL, `addedAt` INTEGER NOT NULL, `coverUri` TEXT, `missing` INTEGER NOT NULL, `favorite` INTEGER NOT NULL, `playCount` INTEGER NOT NULL, `heardMs` INTEGER NOT NULL, `lastPlayed` INTEGER NOT NULL, `searchText` TEXT NOT NULL, `fileName` TEXT NOT NULL, `metadataError` TEXT, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -126,6 +126,11 @@
             "columnName": "fileName",
             "affinity": "TEXT",
             "notNull": true
+          },
+          {
+            "fieldPath": "metadataError",
+            "columnName": "metadataError",
+            "affinity": "TEXT"
           }
         ],
         "primaryKey": {
@@ -310,7 +315,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'c368cc7dbdea6a261ae540b1b3632c35')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'b3e64de63aca0972f86f1d0d78f44790')"
     ]
   }
 }

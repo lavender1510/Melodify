@@ -40,7 +40,7 @@ class PlaybackIntegrationTest {
             val deadline=System.currentTimeMillis()+20000
             while(context.library.status.value.running && System.currentTimeMillis()<deadline)Thread.sleep(100)
             assertNull(context.library.status.value.error)
-            assertNotNull(runBlocking { context.database.music().allTracks().find { it.uri==uri.toString() } })
+            assertNotNull(runBlocking { context.database.music().allTracks().find { it.fileName=="Melodify-instrumentation.wav" && ContentUris.parseId(android.net.Uri.parse(it.uri))==ContentUris.parseId(uri) } })
             val track=Track(idFor(uri.toString()),uri.toString(),"instrumentation","Testton",duration=4000)
             runBlocking { context.database.music().upsertTracks(listOf(track)) }
             val future=MediaController.Builder(context,SessionToken(context,ComponentName(context,PlaybackService::class.java))).buildAsync()

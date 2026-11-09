@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
+    id("androidx.room")
 }
 android {
     namespace = "dev.lyvt.melodify"
@@ -26,7 +27,7 @@ android {
     }
     testOptions { unitTests.isIncludeAndroidResources = true }
 }
-ksp { arg("room.schemaLocation", "$projectDir/schemas") }
+room { schemaDirectory("$projectDir/schemas") }
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2026.09.00"))
     implementation("androidx.activity:activity-compose:1.13.0")
