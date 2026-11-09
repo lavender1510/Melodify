@@ -41,7 +41,8 @@ const fs=require('node:fs/promises');const os=require('node:os');const path=requ
   const invalid=await page.evaluate(()=>window.melodify.save({settings:{volume:9}}).then(()=>false,()=>true));assert.equal(invalid,true);
   const dataPath=await app.evaluate(({app})=>app.getPath('userData'));assert.equal(dataPath.startsWith(root),true);
   const liveLibrary=path.join(dataPath,'library.json');await fs.copyFile(liveLibrary,liveLibrary+'.backup');await fs.writeFile(liveLibrary,'{broken-live');
-  await page.getByTitle('Favorit',{exact:true}).click();await page.getByRole('button',{name:'Lokales Backup wiederherstellen'}).waitFor();
+  // An in-flight checkpoint may already show protection before pointer hit-testing.
+  await page.getByTitle('Favorit',{exact:true}).dispatchEvent('click');await page.getByRole('button',{name:'Lokales Backup wiederherstellen'}).waitFor();
   await page.getByRole('button',{name:'Lokales Backup wiederherstellen'}).click();await page.getByRole('button',{name:'Lokales Backup wiederherstellen'}).waitFor({state:'detached'});
   assert.equal(await page.getByTitle('Pause',{exact:true}).count(),0);
   await app.close();app=null;
