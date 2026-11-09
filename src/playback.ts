@@ -41,12 +41,22 @@ export class PlaybackLoader {
 
 /** Shuffle visits every available ID once; history makes Previous deterministic. */
 export class QueueNavigator {
+ private cursor=-1;
  private visited=new Set<string>();
  private history:string[]=[];
  private forward:string[]=[];
- reset(){this.visited.clear();this.history=[];this.forward=[];}
+ select(list:string[],active:string|null,index?:number){this.cursor=index!==undefined&&list[index]===active?index:list.indexOf(active||'');}
+ position(list:string[],active:string|null){return list[this.cursor]===active?this.cursor:list.indexOf(active||'');}
+ reset(){this.cursor=-1;this.visited.clear();this.history=[];this.forward=[];}
  next(list:string[],active:string|null,direction:1|-1,shuffle:boolean,repeat:boolean,ended:boolean,random= Math.random):string|null {
-  const ids=[...new Set(list)];if(!ids.length)return null;
+  if(!list.length)return null;
+  if(!shuffle){
+   const current=this.position(list,active);
+   let next=direction===-1?Math.max(0,current-1):current+1;
+   if(next>=list.length){if(repeat||!ended)next=0;else return null;}
+   this.cursor=next;return list[next];
+  }
+  const ids=[...new Set(list)];
   if(direction===-1){
    while(this.history.length){const id=this.history.pop()!;if(ids.includes(id)){if(active)this.forward.push(active);return id;}}
    return ids[Math.max(0,ids.indexOf(active||'')-1)];

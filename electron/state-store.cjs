@@ -17,7 +17,7 @@ function validate(raw, defaults) {
   if (!Array.isArray(next.settings.equalizer) || next.settings.equalizer.length !== 10 || !next.settings.equalizer.every(x=>Number.isFinite(x)&&x>=-12&&x<=12)) throw new Error('Ungültiger Equalizer.');
   for (const key of ['normalize','visualization','minimizeToTray']) if (typeof next.settings[key] !== 'boolean') throw new Error(`Ungültige Einstellung: ${key}`);
   for (const key of ['outputDevice','eqPreset']) if (typeof next.settings[key] !== 'string') throw new Error(`Ungültige Einstellung: ${key}`);
-  if (next.session !== undefined && (!object(next.session) || !strings(next.session.queue) || !(next.session.activeId===null || typeof next.session.activeId==='string') || !Number.isFinite(next.session.position) || next.session.position<0 || !['off','all','one'].includes(next.session.repeat) || typeof next.session.shuffle!=='boolean')) throw new Error('Ungültige Wiedergabesitzung.');
+  if (next.session !== undefined && (!object(next.session) || !strings(next.session.queue) || (next.session.queueIndex!==undefined && (!Number.isInteger(next.session.queueIndex)||next.session.queueIndex < -1||next.session.queueIndex>=next.session.queue.length)) || !(next.session.activeId===null || typeof next.session.activeId==='string') || !Number.isFinite(next.session.position) || next.session.position<0 || !['off','all','one'].includes(next.session.repeat) || typeof next.session.shuffle!=='boolean')) throw new Error('Ungültige Wiedergabesitzung.');
   return next;
 }
 class StateStore {
@@ -41,7 +41,7 @@ class StateStore {
       try { await handle.writeFile(data,'utf8'); await handle.sync(); } finally { await handle.close(); }
       // Only valid primary data may replace the last known good backup.
       try { await this.read(this.file); await fs.copyFile(this.file,this.file+'.backup.tmp'); await fs.rename(this.file+'.backup.tmp',this.file+'.backup'); }
-      catch(e) { if(e.code!=='ENOENT') throw e; }
+      catch(e) { if(e.code!=='ENOENT'){this.blocked=true;this.status='Der vorhandene Datenstand oder das Backup konnte nicht sicher geprüft werden. Speichern ist gesperrt; bitte Datenzugriff prüfen oder ein Backup wiederherstellen.';throw e;} }
       await fs.rename(temp,this.file);
     });
     this.tail=operation.catch(()=>{}); return operation;

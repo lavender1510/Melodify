@@ -36,3 +36,7 @@ describe('queue navigation',()=>{
  it('previous and next follow listening history',()=>{const q=new QueueNavigator(),ids=['a','b','c'];const next=q.next(ids,'a',1,true,false,false,()=>.99);expect(next).toBe('c');expect(q.next(ids,next,-1,true,false,false)).toBe('a');expect(q.next(ids,'a',1,true,false,false)).toBe('c');});
  it('repeat starts another cycle and removed tracks are skipped',()=>{const q=new QueueNavigator();expect(q.next(['a','b'],'a',1,true,true,true,()=>0)).toBe('b');expect(q.next(['a','b'],'b',1,true,true,true,()=>0)).toBe('a');expect(q.next(['a'],'a',1,false,false,true)).toBeNull();expect(q.next([],null,1,true,true,true)).toBeNull();});
 });
+
+it('manual playback retains repeated playlist entries and restores their cursor',()=>{
+ const q=new QueueNavigator(),ids=['a','b','a'];q.select(ids,'a',0);expect(q.next(ids,'a',1,false,false,true)).toBe('b');expect(q.next(ids,'b',1,false,false,true)).toBe('a');expect(q.position(ids,'a')).toBe(2);expect(q.next(ids,'a',1,false,false,true)).toBeNull();q.select(ids,'a',2);expect(q.next(ids,'a',-1,false,false,false)).toBe('b');
+});

@@ -185,7 +185,7 @@ app.whenReady().then(async()=> {
     for(const key of ['playlists','favorites','favoritePlaylists','customThemes','themeId','session']) if(Object.hasOwn(patch,key)) allowed[key]=patch[key];
     if(Object.hasOwn(patch,'settings')) allowed.settings={...state.settings,...patch.settings};
     const candidate=validate({...state,...allowed},defaults);
-    state=candidate; await saveState();return publicState();
+    state=candidate; await saveState();return {ok:true};
   });
   handle('library:add-folder',async()=>{ ensureWritable(); if(scanning)throw new Error('Bitte laufenden Scan abwarten oder abbrechen.'); const result=await dialog.showOpenDialog(win,{title:'Musikordner auswählen',properties:['openDirectory','multiSelections']}); if(!result.canceled){state.folders=[...new Set([...state.folders,...result.filePaths])];await saveState();return scan();}return {cancelled:true};});
   handle('library:rescan',(_event,folder)=>scan(folder));

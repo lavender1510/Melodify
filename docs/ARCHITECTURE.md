@@ -14,7 +14,7 @@ Es werden maximal vier Metadatenoperationen gleichzeitig gestartet. Ein Batch ha
 ## Renderer
 
 - `playback.ts/PlaybackLoader`: ein Eigentümer des Audioelements; vorherigen Auftrag abbrechen, Diagnose/AudioContext/Metadaten/play unter gemeinsamer Deadline, veraltete Ergebnisse ignorieren, Listener aufräumen. Bestehende Web-Audio-Kette bleibt bestehen.
-- `playback.ts/QueueNavigator`: Durchlauf ohne Shuffle-Wiederholungen, getrennte Vorwärts-/Rückwärtshistorie, entfernte IDs überspringen. Historie und verbrauchte Shuffle-IDs sind laufzeitlokal; Queue/Reihenfolge/Shuffle-Modus werden persistiert.
+- `playback.ts/QueueNavigator`: Durchlauf ohne Shuffle-Wiederholungen, getrennte Vorwärts-/Rückwärtshistorie, entfernte IDs überspringen. Historie und verbrauchte Shuffle-IDs sind laufzeitlokal; Queue/Reihenfolge/Shuffle-Modus und Queue-Position bei mehrfach vorkommenden Titeln werden persistiert.
 - `playlists.ts`: regelbasierte lokale Auflösung und unveränderliches Umordnen. Main und Renderer haben bewusst sehr kleine identische Resolver; Tests prüfen Export und Darstellung.
 - `VirtualSongRows.tsx`: feste 66-px-Zeilen, ab 201 Titeln nur Viewport plus Puffer im vorhandenen Scroller. Kleine Listen behalten das bisherige Verhalten.
 - `music.ts`: globale Suche und Sortierung; `theme.ts`/`spicetifyThemes.ts`: unveränderte Farbquellen.
@@ -22,7 +22,7 @@ Es werden maximal vier Metadatenoperationen gleichzeitig gestartet. Ein Batch ha
 
 ## Shutdown und Sitzung
 
-Alle fünf Sekunden wird der aktuelle Sitzungsstand gespeichert. Beim echten Schließen fordert Main einen letzten Snapshot an, wartet auf die IPC-Speicherung und lässt anschließend die Schreibkette auslaufen. Nach drei Sekunden ohne Renderer-Antwort wird der letzte bereits angenommene Speicherstand verwendet. Bei Minimieren in den Tray läuft die Sitzung weiter. Bei hartem Prozessabbruch/Stromausfall ist nur der letzte erfolgreiche Checkpoint zugesichert. Lautstärke bleibt Bestandteil der Einstellungen.
+Alle fünf Sekunden wird ein geänderter Sitzungsstand gespeichert; unveränderte Checkpoints erzeugen keine weitere Dateioperation. Beim echten Schließen fordert Main einen letzten Snapshot an, wartet auf die IPC-Speicherung und lässt anschließend die Schreibkette auslaufen. Nach drei Sekunden ohne Renderer-Antwort wird der letzte bereits angenommene Speicherstand verwendet. Bei Minimieren in den Tray läuft die Sitzung weiter. Bei hartem Prozessabbruch/Stromausfall ist nur der letzte erfolgreiche Checkpoint zugesichert. Lautstärke bleibt Bestandteil der Einstellungen.
 
 ## Sicherheitsgrenzen
 

@@ -42,6 +42,12 @@ const fs=require('node:fs/promises');const os=require('node:os');const path=requ
   app=await launch();page=await app.firstWindow();await page.waitForFunction(()=>!!window.melodify);await page.waitForSelector('.melodify-splash',{state:'detached'});
   await app.close();app=await launch();page=await app.firstWindow();await page.waitForFunction(()=>!!window.melodify);await page.waitForSelector('.melodify-splash',{state:'detached'});
   saved=await page.evaluate(()=>window.melodify.load());assert.equal(saved.playlists[0].name,'Umbenannt');assert.equal(saved.session.position,42);assert.deepEqual(saved.session.queue,[saved.tracks[0].id,'kept-missing-id']);assert.equal(await page.getByTitle('Abspielen',{exact:true}).count()>0,true);
+  // Recovery must restore the renderer session before periodic checkpoints resume.
+  await app.close();app=null;
+  const libraryFile=path.join(dataPath,'library.json');await fs.copyFile(libraryFile,libraryFile+'.backup');await fs.writeFile(libraryFile,'{broken');
+  app=await launch();page=await app.firstWindow();await page.getByRole('button',{name:'Lokales Backup wiederherstellen'}).waitFor();assert.equal(await fs.readFile(libraryFile,'utf8'),'{broken');
+  await page.getByRole('button',{name:'Lokales Backup wiederherstellen'}).click();await page.getByRole('button',{name:'Lokales Backup wiederherstellen'}).waitFor({state:'detached'});
+  await page.waitForTimeout(5100);saved=await page.evaluate(()=>window.melodify.load());assert.equal(saved.session.position,42);assert.deepEqual(saved.session.queue,[saved.tracks[0].id,'kept-missing-id']);assert.equal((await fs.readdir(dataPath)).some(f=>f.startsWith('library.json.damaged-')),true);
   assert.deepEqual(errors,[]);console.log('Desktop smoke passed: sandbox/preload, playlist create/rename, IPC validation, real scan/playback, rapid skips, missing-file retention, clean close, restart/session paused.');
  } finally {if(app)await app.close().catch(()=>{});await fs.rm(root,{recursive:true,force:true,maxRetries:5});}
 })().catch(error=>{console.error(error);process.exitCode=1;});

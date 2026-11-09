@@ -26,6 +26,7 @@ npm run typecheck
 npm test
 npm run build
 npm run test:audio
+npm run test:codecs
 npm run test:desktop
 npm run dist:win
 ```
@@ -38,7 +39,7 @@ Die Windows-CI baut NSIS und portable ZIP, prüft Installation, App-Start, Sitzu
 
 Windows: `%APPDATA%/Melodify/library.json` (der genaue Profilordner richtet sich nach Electron-App-Name/Installation). Daneben liegen `library.json.backup` und Covercache. `--user-data-dir=<Pfad>` erlaubt ein separates Profil.
 
-Ein beschädigter oder unbekannter Datenstand wird niemals automatisch überschrieben. Der Schutzdialog kann das letzte validierte Backup ausdrücklich wiederherstellen. Zuvor wird das vorhandene Original als `library.json.damaged-<Zeitstempel>` gesichert. Ohne lesbares Backup bleibt das Original unverändert; eine manuelle Reparatur ist dann erforderlich. Vor einer manuellen Reparatur App vollständig beenden und den gesamten Profilordner kopieren. Keine gleichzeitigen App-Instanzen mit demselben Profil verwenden.
+Ein beschädigter oder unbekannter Datenstand wird niemals automatisch überschrieben. Der Schutzdialog kann das letzte validierte Backup ausdrücklich wiederherstellen. Zuvor wird das vorhandene Original als `library.json.damaged-<Zeitstempel>` gesichert. Ohne lesbares Backup bleibt das Original unverändert; eine manuelle Reparatur ist dann erforderlich. Vor einer manuellen Reparatur App vollständig beenden und den gesamten Profilordner kopieren. Ein Single-Instance-Lock verhindert gleichzeitige App-Instanzen mit demselben Profil.
 
 ## Grenzen und Testnachweise
 

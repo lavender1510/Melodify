@@ -1,11 +1,11 @@
 const fs=require('node:fs');
 /** A single debounced worker: file bursts and overlapping roots never start parallel scans. */
 class FolderWatcher {
- constructor(scan,onError){this.scan=scan;this.onError=onError;this.watchers=new Map();this.pending=new Set();this.timer=null;this.running=false;this.closed=false;}
+ constructor(scan,onError,watch=fs.watch){this.watch=watch;this.scan=scan;this.onError=onError;this.watchers=new Map();this.pending=new Set();this.timer=null;this.running=false;this.closed=false;}
  configure(folders){
   for(const [folder,watcher] of this.watchers)if(!folders.includes(folder)){watcher.close();this.watchers.delete(folder);this.pending.delete(folder);}
   for(const folder of folders)if(!this.watchers.has(folder)){
-   try{const watcher=fs.watch(folder,{recursive:true},()=>{this.pending.add(folder);this.schedule();});watcher.on('error',error=>{watcher.close();this.watchers.delete(folder);this.onError(folder,error);});this.watchers.set(folder,watcher);}
+   try{const watcher=this.watch(folder,{recursive:true},()=>{this.pending.add(folder);this.schedule();});watcher.on('error',error=>{watcher.close();this.watchers.delete(folder);this.onError(folder,error);});this.watchers.set(folder,watcher);}
    catch(error){this.onError(folder,error);}
   }
  }
