@@ -1,6 +1,6 @@
 {
   "name": "melodify",
-  "version": "0.1.6",
+  "version": "0.2.0",
   "description": "A polished, local-first music player for Windows",
   "author": "lavender1510",
   "license": "MIT",
@@ -11,8 +11,12 @@
     "dev": "node scripts/prepare-brand.cjs && concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env MELODIFY_DEV_URL=http://127.0.0.1:5173 electron .\"",
     "build": "node scripts/prepare-brand.cjs && tsc --noEmit && vite build",
     "dist:win": "npm run build && electron-builder --win nsis portable --x64",
-    "test": "vitest run && node --test electron/media-server.test.cjs",
-    "test:audio": "electron --no-sandbox electron/audio-smoke.cjs"
+    "test": "vitest run src && node --test electron/*.test.cjs",
+    "test:audio": "electron --no-sandbox electron/audio-smoke.cjs",
+    "typecheck": "tsc --noEmit",
+    "test:desktop": "node scripts/desktop-smoke.cjs",
+    "test:performance": "vitest run src/performance.test.ts",
+    "test:codecs": "electron electron/codec-smoke.cjs test/fixtures/audio"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
@@ -29,6 +33,7 @@
     "cross-env": "^7.0.3",
     "electron": "^45.2.3",
     "electron-builder": "^26.0.12",
+    "playwright": "^1.65.0",
     "typescript": "^5.7.2",
     "vite": "^6.0.0",
     "vitest": "^3.0.0",
