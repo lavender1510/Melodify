@@ -2,7 +2,11 @@
 
 Stand 09.11.2026. Der jeweils letzte erfolgreiche Android-Check in [PR #8](https://github.com/lavender1510/Melodify/pull/8) ist maßgeblich für den finalen Commit und die dazugehörigen Artefakte.
 
-## Ausgeführt
+## Layout-Update 0.1.1
+
+UI-Änderung auf `feat/android-library-layout`, aufgebaut auf dem noch offenen Android-PR #8. Keine Änderungen an Audio-Engine, Room-Schema, Settings-Daten oder Farbpaletten. Der separate Update-PR enthält den aktuellen Build-/Teststatus; die unten aufgeführten Ergebnisse für 0.1.0 bleiben historische Nachweise. Der Compose-Test prüft nun die einblendbare Suche, horizontal erreichbare Kategorien, Playlist-Erstellung über die Kopfzeile und Sammlungs-Kacheln; zusätzliche Playlist-Screenshots werden exportiert. Keine Hardware-Erfolge werden daraus abgeleitet.
+
+## Ausgeführt (0.1.0)
 
 - Lokal mit vollständigem JDK 21, AGP 9.5.1, Gradle 9.6.0 und SDK 37.0: **11 JVM-Tests erfolgreich**, einschließlich aktueller Scan-Merge-Regeln. Kotlin sowie Android-Instrumentationstestcode kompilieren. Akzent-/Mehrwortsuche, geordnete Queue/Duplikate, M3U/BOM/Pfade/übersprungene URLs, IDs, LRC-Zeitstempel/Offsets/Plaintext und begrenztes Einlesen großer Dokumente wurden geprüft.
 - Regression: aktuelle Favoriten und Hörstatistiken bleiben beim Scan-Merge erhalten; Metadatenfehler und fehlende Dateien erhalten bekannte Informationen. Der Room-DAO liest den aktuellen Stand erst innerhalb der Commit-Transaktion.

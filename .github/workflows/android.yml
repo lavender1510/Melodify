@@ -59,21 +59,22 @@ jobs:
             mkdir -p app/build/reports/screenshots
             adb exec-out run-as dev.lyvt.melodify.android cat files/android-home.png > app/build/reports/screenshots/android-home.png
             adb exec-out run-as dev.lyvt.melodify.android cat files/android-settings.png > app/build/reports/screenshots/android-settings.png
+            adb exec-out run-as dev.lyvt.melodify.android cat files/android-playlists.png > app/build/reports/screenshots/android-playlists.png
             python3 -c "from pathlib import Path; assert all(p.read_bytes().startswith(bytes([137,80,78,71,13,10,26,10])) for p in Path('app/build/reports/screenshots').glob('*.png'))"
       - name: Build unsigned optimized release APK and AAB
         run: ./gradlew assembleRelease bundleRelease
       - name: Prepare clearly labelled packages
         run: |
           mkdir -p preview
-          cp app/build/outputs/apk/debug/app-debug.apk preview/Melodify-Android-0.1.0-test.apk
-          cp app/build/outputs/apk/release/app-release-unsigned.apk preview/Melodify-Android-0.1.0-unsigned.apk
-          cp app/build/outputs/bundle/release/app-release.aab preview/Melodify-Android-0.1.0-unsigned.aab
+          cp app/build/outputs/apk/debug/app-debug.apk preview/Melodify-Android-0.1.1-test.apk
+          cp app/build/outputs/apk/release/app-release-unsigned.apk preview/Melodify-Android-0.1.1-unsigned.apk
+          cp app/build/outputs/bundle/release/app-release.aab preview/Melodify-Android-0.1.1-unsigned.aab
           cd preview
           sha256sum *.apk *.aab > SHA256SUMS.txt
       - name: Upload Android packages
         uses: actions/upload-artifact@v4
         with:
-          name: Melodify-Android-v0.1.0
+          name: Melodify-Android-v0.1.1
           if-no-files-found: error
           path: apps/android/preview/*
       - name: Upload test evidence
@@ -87,7 +88,7 @@ jobs:
             apps/android/app/build/test-results/
             apps/android/app/build/outputs/androidTest-results/
   draft:
-    if: (github.event_name == 'workflow_dispatch' && inputs.prepare_draft) || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/android-v0.1.0')
+    if: (github.event_name == 'workflow_dispatch' && inputs.prepare_draft) || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/android-library-layout')
     needs: android
     runs-on: ubuntu-latest
     permissions:
@@ -100,7 +101,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: Melodify-Android-v0.1.0
+          name: Melodify-Android-v0.1.1
           path: packages
       - name: Prepare draft only; never publish
         run: |
@@ -113,10 +114,10 @@ jobs:
 
           Dieser Release ist ein Entwurf und darf erst nach ausdrücklicher Freigabe veröffentlicht werden.
           NOTES
-          if gh release view android-v0.1.0 --json isDraft --jq '.isDraft' > draft-state.txt 2>/dev/null; then
+          if gh release view android-v0.1.1 --json isDraft --jq '.isDraft' > draft-state.txt 2>/dev/null; then
             test "$(cat draft-state.txt)" = true
-            gh release edit android-v0.1.0 --target "$SOURCE_SHA" --notes-file notes.md
+            gh release edit android-v0.1.1 --target "$SOURCE_SHA" --notes-file notes.md
           else
-            gh release create android-v0.1.0 --target "$SOURCE_SHA" --title 'Melodify Android v0.1.0 — Preview' --draft --prerelease --notes-file notes.md
+            gh release create android-v0.1.1 --target "$SOURCE_SHA" --title 'Melodify Android v0.1.1 — Preview' --draft --prerelease --notes-file notes.md
           fi
-          gh release upload android-v0.1.0 ./*.apk ./*.aab SHA256SUMS.txt --clobber
+          gh release upload android-v0.1.1 ./*.apk ./*.aab SHA256SUMS.txt --clobber

@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
@@ -23,6 +24,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -33,6 +35,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.lyvt.melodify.data.*
@@ -55,6 +58,7 @@ fun time(ms: Long): String {
 @Composable
 fun MelodifyApp(vm: MusicViewModel) {
     val tracks by vm.tracks.collectAsStateWithLifecycle()
+    val queryText by vm.query.collectAsStateWithLifecycle()
     val results by vm.results.collectAsStateWithLifecycle()
     val playlists by vm.playlists.collectAsStateWithLifecycle()
     val entries by vm.entries.collectAsStateWithLifecycle()
@@ -79,6 +83,8 @@ fun MelodifyApp(vm: MusicViewModel) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     var queue by remember { mutableStateOf(false) }
     var topMenu by remember { mutableStateOf(false) }
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
+    var playlistsDescending by rememberSaveable { mutableStateOf(false) }
     var trackMenu by remember { mutableStateOf<Track?>(null) }
     var playlistTarget by remember { mutableStateOf<Track?>(null) }
     var editPlaylist by remember { mutableStateOf<Playlist?>(null) }
@@ -177,20 +183,45 @@ fun MelodifyApp(vm: MusicViewModel) {
                         Column {
                             TopAppBar(
                                 title = {
-                                    Column {
-                                        Text(
-                                            "melodify.",
-                                            fontWeight = FontWeight.Bold,
-                                            color = scheme.onBackground,
-                                        )
-                                        Text(
-                                            group ?: page,
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = scheme.primary,
+                                    Text(
+                                        "melodify.",
+                                        fontSize = 26.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = scheme.onBackground,
+                                    )
+                                },
+                                colors =
+                                    TopAppBarDefaults.topAppBarColors(
+                                        containerColor = scheme.background
+                                    ),
+                                actions = {
+                                    if (page == "Playlists")
+                                        IconButton(
+                                            onClick = {
+                                                playlistName = ""
+                                                editPlaylist = null
+                                                createPlaylist = true
+                                            }
+                                        ) {
+                                            Icon(Icons.Rounded.Add, "Playlist erstellen")
+                                        }
+                                    IconButton(
+                                        onClick = {
+                                            if (searchOpen || queryText.isNotEmpty()) {
+                                                searchOpen = false
+                                                vm.query.value = ""
+                                            } else searchOpen = true
+                                        }
+                                    ) {
+                                        Icon(
+                                            if (searchOpen || queryText.isNotEmpty())
+                                                Icons.Rounded.Close
+                                            else Icons.Rounded.Search,
+                                            if (searchOpen || queryText.isNotEmpty())
+                                                "Suche schließen"
+                                            else "Suche öffnen",
                                         )
                                     }
-                                },
-                                actions = {
                                     IconButton(onClick = { vm.app.library.scan() }) {
                                         Icon(Icons.Rounded.Refresh, "Bibliothek aktualisieren")
                                     }
@@ -234,9 +265,21 @@ fun MelodifyApp(vm: MusicViewModel) {
                                     }
                                 },
                             )
-                            if (page != "Einstellungen")
+                            if (!tablet)
+                                LibraryTabs(page) { destination ->
+                                    page = destination
+                                    group = null
+                                    playlistId = null
+                                }
+                            if (group != null || page !in destinations + "Favoriten")
+                                Text(
+                                    group ?: page,
+                                    Modifier.padding(start = 24.dp, bottom = 12.dp),
+                                    style = MaterialTheme.typography.titleLarge,
+                                )
+                            if (page != "Einstellungen" && (searchOpen || queryText.isNotEmpty()))
                                 OutlinedTextField(
-                                    value = vm.query.collectAsStateWithLifecycle().value,
+                                    value = queryText,
                                     onValueChange = {
                                         vm.query.value = it
                                         if (it.isNotBlank()) {
@@ -270,87 +313,24 @@ fun MelodifyApp(vm: MusicViewModel) {
                         }
                     },
                     bottomBar = {
-                        Column {
-                            if (playback.current != null) {
-                                Surface(
-                                    color = scheme.surfaceVariant,
-                                    onClick = { expanded = true },
-                                ) {
-                                    Column {
-                                        Row(
-                                            Modifier.fillMaxWidth()
-                                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) {
-                                            Cover(
-                                                tracks.firstOrNull {
-                                                    it.id == playback.current?.mediaId
-                                                }
-                                            )
-                                            Column(
-                                                Modifier.weight(1f).padding(horizontal = 12.dp)
-                                            ) {
-                                                Text(
-                                                    playback.current
-                                                        ?.mediaMetadata
-                                                        ?.title
-                                                        ?.toString()
-                                                        .orEmpty(),
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                )
-                                                Text(
-                                                    playback.current
-                                                        ?.mediaMetadata
-                                                        ?.artist
-                                                        ?.toString()
-                                                        .orEmpty(),
-                                                    maxLines = 1,
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                )
-                                            }
-                                            IconButton(onClick = vm::toggle) {
-                                                Icon(
-                                                    if (playback.playing) Icons.Rounded.Pause
-                                                    else Icons.Rounded.PlayArrow,
-                                                    if (playback.playing) "Pause" else "Abspielen",
-                                                )
-                                            }
-                                            IconButton(onClick = vm::next) {
-                                                Icon(Icons.Rounded.SkipNext, "Nächster Titel")
-                                            }
-                                        }
-                                        LinearProgressIndicator(
-                                            progress = {
-                                                if (playback.duration > 0)
-                                                    playback.position.toFloat() / playback.duration
-                                                else 0f
-                                            },
-                                            modifier = Modifier.fillMaxWidth(),
-                                        )
-                                    }
-                                }
-                            }
-                            if (!tablet)
-                                NavigationBar {
-                                    destinations.forEachIndexed { i, label ->
-                                        NavigationBarItem(
-                                            selected = page == label,
-                                            onClick = {
-                                                page = label
-                                                group = null
-                                                playlistId = null
-                                            },
-                                            icon = { Icon(navIcons[i], label) },
-                                            label = { Text(label, maxLines = 1) },
-                                        )
-                                    }
-                                }
-                        }
+                        if (playback.current != null)
+                            FloatingMiniPlayer(
+                                playback,
+                                tracks.firstOrNull { it.id == playback.current?.mediaId },
+                                onOpen = { expanded = true },
+                                onToggle = vm::toggle,
+                                onPrevious = vm::previous,
+                                onNext = vm::next,
+                                onQueue = { queue = true },
+                            )
                     },
                 ) { padding ->
-                    Box(Modifier.fillMaxSize().padding(padding)) {
+                    Box(
+                        Modifier.fillMaxSize()
+                            .padding(padding)
+                            .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                            .background(scheme.surface)
+                    ) {
                         if (settings.background.isNotEmpty()) {
                             val bitmap by
                                 produceState<android.graphics.Bitmap?>(null, settings.background) {
@@ -502,8 +482,8 @@ fun MelodifyApp(vm: MusicViewModel) {
                                 ) {
                                     item {
                                         Text(
-                                            "Deine Musik.\nDein Moment.",
-                                            style = MaterialTheme.typography.headlineLarge,
+                                            "Deine Musik.",
+                                            style = MaterialTheme.typography.headlineMedium,
                                             fontWeight = FontWeight.Bold,
                                         )
                                         Spacer(Modifier.height(8.dp))
@@ -604,32 +584,42 @@ fun MelodifyApp(vm: MusicViewModel) {
                                 if (p == null)
                                     LazyColumn(contentPadding = PaddingValues(16.dp)) {
                                         item {
-                                            Button(
-                                                onClick = {
-                                                    playlistName = ""
-                                                    editPlaylist = null
-                                                    createPlaylist = true
-                                                }
+                                            Row(
+                                                Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(16.dp),
                                             ) {
-                                                Icon(Icons.Rounded.Add, null)
-                                                Text("Playlist erstellen")
+                                                val recent =
+                                                    tracks
+                                                        .sortedByDescending { it.addedAt }
+                                                        .take(100)
+                                                val popular =
+                                                    tracks
+                                                        .sortedByDescending { it.playCount }
+                                                        .take(100)
+                                                CollectionTile(
+                                                    "Zuletzt hinzugefügt",
+                                                    recent,
+                                                    Modifier.weight(1f),
+                                                ) {
+                                                    group = "Zuletzt hinzugefügt"
+                                                    page = "Sammlung"
+                                                }
+                                                CollectionTile(
+                                                    "Meistgehört",
+                                                    popular,
+                                                    Modifier.weight(1f),
+                                                ) {
+                                                    group = "Meistgehört"
+                                                    page = "Sammlung"
+                                                }
                                             }
                                         }
-                                        items(
-                                            listOf(
-                                                "Zuletzt hinzugefügt",
-                                                "Meistgehört",
-                                                "Zuletzt abgespielt",
-                                                "Noch nie gehört",
-                                            )
-                                        ) { name ->
+                                        items(listOf("Zuletzt abgespielt", "Noch nie gehört")) {
+                                            name ->
                                             ListItem(
                                                 headlineContent = { Text(name) },
-                                                supportingContent = {
-                                                    Text("Intelligente lokale Sammlung")
-                                                },
                                                 leadingContent = {
-                                                    Icon(Icons.Rounded.AutoAwesome, null)
+                                                    Icon(Icons.Rounded.History, null)
                                                 },
                                                 modifier =
                                                     Modifier.clickable {
@@ -638,31 +628,67 @@ fun MelodifyApp(vm: MusicViewModel) {
                                                     },
                                             )
                                         }
-                                        items(playlists, key = { it.id }) { item ->
+                                        item {
+                                            TextButton(
+                                                onClick = {
+                                                    playlistsDescending = !playlistsDescending
+                                                }
+                                            ) {
+                                                Icon(
+                                                    if (playlistsDescending)
+                                                        Icons.Rounded.ArrowDownward
+                                                    else Icons.Rounded.SortByAlpha,
+                                                    null,
+                                                )
+                                                Spacer(Modifier.width(8.dp))
+                                                Text(
+                                                    if (playlistsDescending) "Name · Z–A"
+                                                    else "Name · A–Z"
+                                                )
+                                            }
+                                        }
+                                        items(
+                                            if (playlistsDescending)
+                                                playlists.sortedByDescending { it.name.lowercase() }
+                                            else playlists.sortedBy { it.name.lowercase() },
+                                            key = { it.id },
+                                        ) { item ->
                                             ListItem(
                                                 headlineContent = { Text(item.name) },
                                                 leadingContent = {
-                                                    Cover(null, uri = item.coverUri)
-                                                },
-                                                supportingContent = {
-                                                    Text(
-                                                        "${entries.count { it.playlistId==item.id }} Titel"
+                                                    Cover(
+                                                        null,
+                                                        Modifier.size(64.dp),
+                                                        uri = item.coverUri,
                                                     )
                                                 },
                                                 trailingContent = {
-                                                    IconButton(
-                                                        onClick = {
-                                                            vm.savePlaylist(
-                                                                item.copy(favorite = !item.favorite)
+                                                    Row(
+                                                        verticalAlignment =
+                                                            Alignment.CenterVertically
+                                                    ) {
+                                                        Text(
+                                                            "${entries.count { it.playlistId == item.id }} Titel",
+                                                            style =
+                                                                MaterialTheme.typography.bodySmall,
+                                                            color = scheme.onSurfaceVariant,
+                                                        )
+                                                        IconButton(
+                                                            onClick = {
+                                                                vm.savePlaylist(
+                                                                    item.copy(
+                                                                        favorite = !item.favorite
+                                                                    )
+                                                                )
+                                                            }
+                                                        ) {
+                                                            Icon(
+                                                                if (item.favorite)
+                                                                    Icons.Rounded.Favorite
+                                                                else Icons.Rounded.FavoriteBorder,
+                                                                "Playlist favorisieren",
                                                             )
                                                         }
-                                                    ) {
-                                                        Icon(
-                                                            if (item.favorite)
-                                                                Icons.Rounded.Favorite
-                                                            else Icons.Rounded.FavoriteBorder,
-                                                            "Playlist favorisieren",
-                                                        )
                                                     }
                                                 },
                                                 modifier =
@@ -1224,6 +1250,10 @@ private fun SongList(
         itemsIndexed(tracks, key = { i, t -> "${t.id}:$i" }) { i, t ->
             Column {
                 SongRow(t, { vm.play(tracks, i) }, { vm.favorite(t) }, { onMenu(t) })
+                HorizontalDivider(
+                    Modifier.padding(start = 88.dp, end = 20.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .35f),
+                )
                 if (playlist != null)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         TextButton(onClick = { onMove?.invoke(i, i - 1) }, enabled = i > 0) {
@@ -1245,7 +1275,7 @@ private fun SongList(
 @Composable
 private fun SongRow(t: Track, play: () -> Unit, favorite: () -> Unit, menu: (() -> Unit)?) {
     ListItem(
-        modifier = Modifier.clickable(onClick = play),
+        modifier = Modifier.clickable(onClick = play).padding(vertical = 4.dp),
         headlineContent = { Text(t.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         supportingContent = {
             Text(
@@ -1256,7 +1286,7 @@ private fun SongRow(t: Track, play: () -> Unit, favorite: () -> Unit, menu: (() 
                 overflow = TextOverflow.Ellipsis,
             )
         },
-        leadingContent = { Cover(t) },
+        leadingContent = { Cover(t, Modifier.size(56.dp)) },
         trailingContent = {
             Row {
                 IconButton(onClick = favorite) {
