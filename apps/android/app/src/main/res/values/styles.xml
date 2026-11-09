@@ -1,0 +1,10 @@
+<resources>
+    <style name="BaseThemeMelodify" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">#B99BFF</item>
+        <item name="android:windowBackground">#0B0D12</item>
+    </style>
+    <style name="Theme.Melodify" parent="@style/BaseThemeMelodify" />
+</resources>

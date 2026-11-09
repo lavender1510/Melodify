@@ -5,3 +5,11 @@ release/
 .DS_Store
 .env
 work/
+
+# Native Android outputs and local machine settings
+apps/android/.gradle/
+apps/android/.kotlin/
+apps/android/local.properties
+apps/android/**/build/
+
+apps/android/preview/
