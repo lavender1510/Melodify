@@ -1,6 +1,13 @@
 const {_electron:electron}=require('playwright');
 const assert=require('node:assert/strict');
-const fs=require('node:fs/promises');const os=require('node:os');const path=require('node:path');
+const fs=require('node:fs/promises');const {setTimeout:delay}=require('node:timers/promises');const os=require('node:os');const path=require('node:path');
+// Fault injection writes from outside the app; Windows may temporarily deny sharing.
+async function injectCorruption(file,bytes){
+ for(let attempt=0;;attempt++){
+  try{await fs.writeFile(file,bytes);return;}
+  catch(error){if(attempt>=20||!['EBUSY','EPERM','EACCES'].includes(error.code))throw error;await delay(25);}
+ }
+}
 (async()=>{
  const root=await fs.mkdtemp(path.join(os.tmpdir(),'melodify-desktop-'));
  const executablePath=process.argv[2]||require('electron');
@@ -40,7 +47,8 @@ const fs=require('node:fs/promises');const os=require('node:os');const path=requ
   let saved=await page.evaluate(()=>window.melodify.load());assert.equal(saved.playlists[0].name,'Umbenannt');
   const invalid=await page.evaluate(()=>window.melodify.save({settings:{volume:9}}).then(()=>false,()=>true));assert.equal(invalid,true);
   const dataPath=await app.evaluate(({app})=>app.getPath('userData'));assert.equal(dataPath.startsWith(root),true);
-  const liveLibrary=path.join(dataPath,'library.json');await fs.copyFile(liveLibrary,liveLibrary+'.backup');await fs.writeFile(liveLibrary,'{broken-live');
+  await page.evaluate(()=>window.melodify.save({themeId:'nocturne'}));
+  const liveLibrary=path.join(dataPath,'library.json');await fs.copyFile(liveLibrary,liveLibrary+'.backup');await injectCorruption(liveLibrary,'{broken-live');
   // An in-flight checkpoint may already show protection before pointer hit-testing.
   await page.getByTitle('Favorit',{exact:true}).dispatchEvent('click');await page.getByRole('button',{name:'Lokales Backup wiederherstellen'}).waitFor();
   await page.getByRole('button',{name:'Lokales Backup wiederherstellen'}).click();await page.getByRole('button',{name:'Lokales Backup wiederherstellen'}).waitFor({state:'detached'});
